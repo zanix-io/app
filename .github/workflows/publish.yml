@@ -1,0 +1,30 @@
+# .github/workflows/publish.yml
+
+name: Publish
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Allows reading of the repository's contents.
+      id-token: write # Allows the creation of an ID token for authentication with JSR.
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run tests
+        run: deno test --allow-all
+
+      - name: Publish to Deno
+        run: deno publish
