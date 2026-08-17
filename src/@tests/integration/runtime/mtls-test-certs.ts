@@ -135,6 +135,8 @@ export async function generateMtlsTestCertChain(
       '-days',
       '825',
       '-sha256',
+      '-copy_extensions',
+      'copyall',
     ],
     dir,
   )
