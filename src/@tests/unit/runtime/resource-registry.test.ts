@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import { InternalError } from '@zanix/errors'
 import { ResourceRegistry } from 'modules/runtime/resource-registry.ts'
 
 console.error = () => {}
@@ -27,7 +28,10 @@ Deno.test(
     const first = await registry.resolve('shared', factory)
     const second = await registry.resolve('shared', factory)
 
-    assert(first === second, 'both callers must receive the exact same instance')
+    assert(
+      first === second,
+      'both callers must receive the exact same instance',
+    )
     assertEquals(calls, 1)
   },
 )
@@ -55,8 +59,15 @@ Deno.test(
     releaseFactory()
     const [first, second] = await Promise.all([firstCall, secondCall])
 
-    assertEquals(calls, 1, 'factory must run exactly once, not once per concurrent caller')
-    assert(first === second, 'both concurrent callers must receive the same resolved instance')
+    assertEquals(
+      calls,
+      1,
+      'factory must run exactly once, not once per concurrent caller',
+    )
+    assert(
+      first === second,
+      'both concurrent callers must receive the same resolved instance',
+    )
   },
 )
 
@@ -78,8 +89,15 @@ Deno.test(
     const firstError = await assertRejects(() => firstCall)
     const secondError = await assertRejects(() => secondCall)
 
-    assertEquals(calls, 1, 'a rejecting factory must never be retried for a second caller')
-    assert(firstError === failure && secondError === failure, 'both callers see the same rejection')
+    assertEquals(
+      calls,
+      1,
+      'a rejecting factory must never be retried for a second caller',
+    )
+    assert(
+      firstError === failure && secondError === failure,
+      'both callers see the same rejection',
+    )
   },
 )
 
@@ -111,7 +129,10 @@ Deno.test(
 
     const error = await assertRejects(() => registry.close(), AggregateError)
 
-    assert(goodClosed, "a sibling resource's close() must still run despite another's failure")
+    assert(
+      goodClosed,
+      "a sibling resource's close() must still run despite another's failure",
+    )
     assertEquals((error as AggregateError).errors.length, 1)
   },
 )
@@ -125,7 +146,10 @@ Deno.test(
     // Swallow the expected rejection at the call site — close() must still handle it gracefully
     // internally regardless of whether the original caller awaited/caught it.
     await registry
-      .resolve('never-built', () => Promise.reject(new Error('construction failed')))
+      .resolve(
+        'never-built',
+        () => Promise.reject(new Error('construction failed')),
+      )
       .catch(() => {})
 
     await registry.close() // must NOT throw — nothing ever constructed, nothing to close
@@ -136,3 +160,201 @@ Deno.test('close: a registry with nothing resolved is a no-op', async () => {
   const registry = new ResourceRegistry()
   await registry.close()
 })
+
+// --- release() / reference counting (hot install/uninstall) ---
+
+Deno.test(
+  'release: a resource shared by TWO apps stays open when only ONE releases it',
+  async () => {
+    const registry = new ResourceRegistry()
+    let closed = false
+    const factory = () =>
+      Promise.resolve({
+        close: () => {
+          closed = true
+        },
+      })
+
+    await registry.resolve('shared', factory, 'app-a')
+    await registry.resolve('shared', factory, 'app-b')
+
+    await registry.release('shared', 'app-a')
+    assert(
+      !closed,
+      'the resource must stay open while app-b still references it',
+    )
+
+    await registry.release('shared', 'app-b')
+    assert(
+      closed,
+      'the resource must close once its LAST referencing app releases it',
+    )
+  },
+)
+
+Deno.test(
+  'release: releasing the same app twice is a no-op the second time (already removed from the set)',
+  async () => {
+    const registry = new ResourceRegistry()
+    let closeCalls = 0
+    await registry.resolve(
+      'solo',
+      () => Promise.resolve({ close: () => closeCalls++ }),
+      'app-a',
+    )
+
+    await registry.release('solo', 'app-a')
+    await registry.release('solo', 'app-a') // must not throw, must not double-close
+
+    assertEquals(closeCalls, 1)
+  },
+)
+
+Deno.test(
+  'release: a qualifiedKey never resolved with an ownerApp has nothing to release — no-op',
+  async () => {
+    const registry = new ResourceRegistry()
+    let closed = false
+    await registry.resolve('no-owner', () =>
+      Promise.resolve({
+        close: () => {
+          closed = true
+        },
+      }))
+
+    await registry.release('no-owner', 'some-app')
+
+    assert(
+      !closed,
+      'a resource resolved without ownerApp tracking is never touched by release()',
+    )
+  },
+)
+
+Deno.test(
+  "release: a resource's own close() failure surfaces as an AggregateError",
+  async () => {
+    const registry = new ResourceRegistry()
+    await registry.resolve(
+      'broken-close',
+      () =>
+        Promise.resolve({
+          close: () => {
+            throw new Error('close failed')
+          },
+        }),
+      'app-a',
+    )
+
+    const error = await assertRejects(
+      () => registry.release('broken-close', 'app-a'),
+      AggregateError,
+    )
+    assertEquals((error as AggregateError).errors.length, 1)
+  },
+)
+
+// --- setQuota / clearQuota (resource-instance quota) ---
+
+Deno.test(
+  'setQuota: a 5th distinct resource for an app already holding 4 (quota 4) rejects with ' +
+    'RESOURCE_QUOTA_EXCEEDED — the factory never runs',
+  async () => {
+    const registry = new ResourceRegistry()
+    registry.setQuota('tenant-app', 4)
+    let factoryCalls = 0
+    const factory = () => {
+      factoryCalls++
+      return Promise.resolve({ close: () => {} })
+    }
+
+    await registry.resolve('res-1', factory, 'tenant-app')
+    await registry.resolve('res-2', factory, 'tenant-app')
+    await registry.resolve('res-3', factory, 'tenant-app')
+    await registry.resolve('res-4', factory, 'tenant-app')
+
+    const error = await assertRejects(
+      () => registry.resolve('res-5', factory, 'tenant-app'),
+      InternalError,
+    )
+    assertEquals((error as InternalError).code, 'RESOURCE_QUOTA_EXCEEDED')
+    assertEquals(
+      factoryCalls,
+      4,
+      'the 5th factory must never run once the quota is hit',
+    )
+  },
+)
+
+Deno.test(
+  're-resolving a key an app ALREADY owns never counts against its own quota again',
+  async () => {
+    const registry = new ResourceRegistry()
+    registry.setQuota('tenant-app', 1)
+    const factory = () => Promise.resolve({ close: () => {} })
+
+    await registry.resolve('res-1', factory, 'tenant-app')
+    // Same key, same owner, again — must NOT throw (still just 1 distinct key owned).
+    await registry.resolve('res-1', factory, 'tenant-app')
+  },
+)
+
+Deno.test(
+  'setQuota: referencing an already-shared root resource still counts as ONE unit against the ' +
+    "new owner's own quota",
+  async () => {
+    const registry = new ResourceRegistry()
+    registry.setQuota('tenant-b', 0)
+    const factory = () => Promise.resolve({ close: () => {} })
+
+    await registry.resolve('shared-root', factory, 'tenant-a') // tenant-a has no quota — unlimited
+    const error = await assertRejects(
+      () => registry.resolve('shared-root', factory, 'tenant-b'),
+      InternalError,
+    )
+    assertEquals((error as InternalError).code, 'RESOURCE_QUOTA_EXCEEDED')
+  },
+)
+
+Deno.test(
+  'release: freeing a resource makes room under the quota for a different one',
+  async () => {
+    const registry = new ResourceRegistry()
+    registry.setQuota('tenant-app', 1)
+    const factory = () => Promise.resolve({ close: () => {} })
+
+    await registry.resolve('res-1', factory, 'tenant-app')
+    await registry.release('res-1', 'tenant-app')
+
+    // Must NOT throw — releasing res-1 freed up the one slot the quota allows.
+    await registry.resolve('res-2', factory, 'tenant-app')
+  },
+)
+
+Deno.test(
+  'clearQuota: removes a previously-set quota — the app becomes unlimited again',
+  async () => {
+    const registry = new ResourceRegistry()
+    registry.setQuota('tenant-app', 1)
+    const factory = () => Promise.resolve({ close: () => {} })
+    await registry.resolve('res-1', factory, 'tenant-app')
+
+    registry.clearQuota('tenant-app')
+
+    // Must NOT throw — the quota no longer applies.
+    await registry.resolve('res-2', factory, 'tenant-app')
+  },
+)
+
+Deno.test(
+  'setQuota: an app with no quota set is unlimited (default, unchanged behavior)',
+  async () => {
+    const registry = new ResourceRegistry()
+    const factory = () => Promise.resolve({ close: () => {} })
+
+    for (let i = 0; i < 20; i++) {
+      // deno-lint-ignore no-await-in-loop -- each key is independent; sequential is just simplest
+      await registry.resolve(`res-${i}`, factory, 'unbounded-app')
+    }
+  },
+)

@@ -14,7 +14,10 @@ import { ProgramModule, ZanixConnector, ZanixInteractor, ZanixProvider } from '@
  * @param Target A class decorated with `@Interactor`/`@Provider`/`@Connector`.
  * @throws {InternalError} if `Target` extends none of the three decoratable base classes.
  */
-export function resolveTarget<T>(appName: string, Target: new (...args: never[]) => T): T {
+export function resolveTarget<T>(
+  appName: string,
+  Target: new (...args: never[]) => T,
+): T {
   if (Target.prototype instanceof ZanixInteractor) {
     return ProgramModule.getInteractors(appName).get(Target as never) as T
   }
@@ -28,6 +31,9 @@ export function resolveTarget<T>(appName: string, Target: new (...args: never[])
   throw new InternalError(
     `ctx.resolve() only resolves classes decorated with @Interactor/@Provider/@Connector — ` +
       `"${Target.name}" extends none of them.`,
-    { code: 'UNRESOLVABLE_TARGET', meta: { source: 'zanix', target: Target.name } },
+    {
+      code: 'UNRESOLVABLE_TARGET',
+      meta: { source: 'zanix', target: Target.name },
+    },
   )
 }

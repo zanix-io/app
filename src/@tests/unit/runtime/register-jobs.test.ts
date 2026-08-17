@@ -73,6 +73,9 @@ Deno.test(
       handler: () => {},
     })
 
-    assertEquals(getNamespacedJobOrigin('plain-service-job-outside-app'), undefined)
+    assertEquals(
+      getNamespacedJobOrigin('plain-service-job-outside-app'),
+      undefined,
+    )
   },
 )

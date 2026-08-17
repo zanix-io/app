@@ -2,11 +2,19 @@ import type { NormalizedAppDefinition } from 'typings/manifest.ts'
 import { ProgramModule, registerApplicationMount } from '@zanix/server'
 import { registerNamespacedJobs } from './register-jobs.ts'
 import { buildSetupContext } from './build-setup-context.ts'
+import { createRemoteCaller, type RemoteCallerFactory } from './remote-caller.ts'
+import { registerOperations } from './operation-registry.ts'
+import { registerRemoteDispatchRoutes } from './remote-dispatch-route.ts'
+import { registerBehaviors } from './behavior-registry.ts'
 
 /**
  * Composes one already-normalized app into the running process: opens its own
  * `ProgramModule.defineApplication` scope (giving it its own route/DI identity), registers its
- * mount prefix (unless `routes: false`), namespaces its jobs, then runs `setup(ctx)` (if the
+ * mount prefix (unless `routes: false`), namespaces its jobs, registers its `operations` (both
+ * locally — so any app in this same process can reach them via `ctx.remote()` at zero cost — and,
+ * if it declared any, the HTTP routes a REMOTE caller would dispatch to), registers its
+ * `behaviors` defaults (so `resolveBehavior(def.name, name)` can resolve them even from outside
+ * this app's own `RuntimeContext` — see `behavior-registry.ts`), then runs `setup(ctx)` (if the
  * manifest declared one) with a `ctx` scoped to this app and this call's already-resolved
  * `resources`.
  *
@@ -22,14 +30,22 @@ import { buildSetupContext } from './build-setup-context.ts'
  * @param def The normalized app to register — see `normalize()`.
  * @param resources The shared `Map<`${appName}:${slot}`, instance>` from `resolveResources()` —
  * pass `new Map()` for an app with no resources.
+ * @param remoteCaller See `buildRuntimeContext`'s own doc — shared across every app `registerApp`
+ * is called for in the same batch.
  */
 export async function registerApp(
   def: NormalizedAppDefinition,
   resources: Map<string, unknown>,
+  remoteCaller: RemoteCallerFactory = createRemoteCaller(),
 ): Promise<void> {
   await ProgramModule.defineApplication(def.name, async () => {
-    if (def.routesPrefix !== null) registerApplicationMount(def.name, def.routesPrefix)
+    if (def.routesPrefix !== null) {
+      registerApplicationMount(def.name, def.routesPrefix)
+    }
     registerNamespacedJobs(def)
-    await def.setup?.(buildSetupContext(def, resources))
+    registerOperations(def, resources, remoteCaller)
+    registerBehaviors(def)
+    registerRemoteDispatchRoutes(def)
+    await def.setup?.(buildSetupContext(def, resources, remoteCaller))
   })
 }

@@ -52,21 +52,16 @@
   "imports": {
     "@std/assert": "jsr:@std/assert@0.224",
     "@std/testing": "jsr:@std/testing@1.0.9",
-    // Local path during development (same convention `core/deno.jsonc` already uses) — this
-    // package's own Etapa 4/5 work depends on `@zanix/server` changes (`registerApplicationMount`)
-    // not published to JSR yet. Restore the commented line and drop this one before publishing.
-    //"@zanix/server": "jsr:@zanix/server@^3.1.2",
-    "@zanix/server": "../server/mod.ts",
-    "@zanix/asyncmq": "jsr:@zanix/asyncmq@^0.5.1",
-    // Local path during development, same reason/convention as @zanix/server above — this
-    // package's Hito 5 work needs the connector shapes verified in the LOCAL datamaster repo;
-    // whether an older published version matches isn't worth risking. Restore before publishing.
-    //"@zanix/datamaster": "jsr:@zanix/datamaster@^1.1.0",
-    "@zanix/datamaster": "../datamaster/mod.ts",
-    "@zanix/datamaster/core": "jsr:@zanix/datamaster@^1.1.0/core",
-    "@zanix/auth": "jsr:@zanix/auth@^0.6.1",
-    "@zanix/errors": "jsr:@zanix/utils@^2.5.1/errors",
-    "@zanix/helpers": "jsr:@zanix/utils@^2.5.1/helpers",
+    "@std/semver": "jsr:@std/semver@^1.0.8",
+    "@zanix/server": "jsr:@zanix/server@^3.2.0",
+    "@zanix/asyncmq": "jsr:@zanix/asyncmq@^0.6.0",
+    "@zanix/datamaster": "jsr:@zanix/datamaster@^1.3.0",
+    "@zanix/datamaster/core": "jsr:@zanix/datamaster@^1.3.0/core",
+    "@zanix/auth": "jsr:@zanix/auth@^0.7.0",
+    "@zanix/errors": "jsr:@zanix/utils@^2.6.0/errors",
+    "@zanix/helpers": "jsr:@zanix/utils@^2.6.0/helpers",
+    "@zanix/logger": "jsr:@zanix/utils@^2.6.0/logger",
+    "@zanix/workers": "jsr:@zanix/utils@^2.6.0/workers",
     "shared/": "./src/shared/",
     "typings/": "./src/typings/",
     "utils/": "./src/utils/",
@@ -74,7 +69,8 @@
   },
   "exports": {
     ".": "./mod.ts",
-    "./runtime": "./runtime.ts"
+    "./runtime": "./runtime.ts",
+    "./core": "./core.ts"
   },
   "nodeModulesDir": "auto",
   "publish": {
@@ -87,5 +83,9 @@
     "include": [
       "src/@tests/**/*.test.ts"
     ]
-  }
+  },
+  // "worker-options" backs `Worker`'s `deno: { permissions }`, needed for v7.4's `sandbox.permissions`
+  // (see `SandboxDeclaration` in src/typings/manifest.ts) — required here for this package's own
+  // sandboxing tests, and by any consumer app that restricts a sandboxed operation's permissions.
+  "unstable": ["worker-options"]
 }

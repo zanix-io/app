@@ -1,4 +1,5 @@
 import type { NormalizedAppDefinition } from 'typings/manifest.ts'
+import { createRemoteCaller, type RemoteCallerFactory } from './remote-caller.ts'
 import { buildRuntimeContext } from './build-runtime-context.ts'
 
 /**
@@ -11,15 +12,17 @@ import { buildRuntimeContext } from './build-runtime-context.ts'
  *
  * @param defs Every app being started, in the exact order they should run.
  * @param resources The shared resolved-resources map from `resolveResources()`.
+ * @param remoteCaller See `buildRuntimeContext`'s own doc.
  */
 export async function runOnStart(
   defs: NormalizedAppDefinition[],
   resources: Map<string, unknown>,
+  remoteCaller: RemoteCallerFactory = createRemoteCaller(),
 ): Promise<void> {
   for (const def of defs) {
     if (!def.onStart) continue
     // deno-lint-ignore no-await-in-loop
-    await def.onStart(buildRuntimeContext(def, resources))
+    await def.onStart(buildRuntimeContext(def, resources, remoteCaller))
   }
 }
 
@@ -36,12 +39,14 @@ export async function runOnStart(
  * @param defs Every app being stopped — order doesn't matter, since this runs them concurrently.
  * @param resources The shared resolved-resources map from `resolveResources()` — still valid;
  * not yet closed.
+ * @param remoteCaller See `buildRuntimeContext`'s own doc.
  * @throws {AggregateError} if one or more `onStop` handlers rejected/threw — every failure is
  * aggregated into a single error instead of only surfacing the first one.
  */
 export async function runOnStop(
   defs: NormalizedAppDefinition[],
   resources: Map<string, unknown>,
+  remoteCaller: RemoteCallerFactory = createRemoteCaller(),
 ): Promise<void> {
   const results = await Promise.allSettled(
     defs.map((def) => {
@@ -50,7 +55,9 @@ export async function runOnStop(
       // be `async`; a SYNCHRONOUS throw from a plain function passed straight to `.map()` would
       // escape right here, before `Promise.allSettled` even runs, instead of becoming one of the
       // settled results it's supposed to catch.
-      return Promise.resolve().then(() => onStop && onStop(buildRuntimeContext(def, resources)))
+      return Promise.resolve().then(() =>
+        onStop && onStop(buildRuntimeContext(def, resources, remoteCaller))
+      )
     }),
   )
 
@@ -59,6 +66,9 @@ export async function runOnStop(
     .map((result) => result.reason)
 
   if (errors.length) {
-    throw new AggregateError(errors, `${errors.length} onStop() handler(s) failed.`)
+    throw new AggregateError(
+      errors,
+      `${errors.length} onStop() handler(s) failed.`,
+    )
   }
 }

@@ -3,8 +3,35 @@ import type {
   NormalizedAppDefinition,
   ResolvedResourceKey,
   ResourceBinding,
+  ResourceDeclaration,
   RootResources,
 } from 'typings/manifest.ts'
+
+/** Builds the right {@link ResolvedResourceKey} variant from `declaration`'s own `mode` — the
+ * one place this branch lives, reused by every `resolveKey()` return site below instead of each
+ * repeating the same `mode === 'remote'` check. */
+function toResolvedKey(
+  qualifiedKey: string,
+  declaration: ResourceDeclaration,
+  ownerApp: string | null,
+): ResolvedResourceKey {
+  if (declaration.mode === 'remote') {
+    return {
+      qualifiedKey,
+      type: declaration.type,
+      mode: 'remote',
+      endpoint: declaration.endpoint,
+      requiredVersion: declaration.requiredVersion,
+      ownerApp,
+    }
+  }
+  return {
+    qualifiedKey,
+    type: declaration.type,
+    options: declaration.options,
+    ownerApp,
+  }
+}
 
 /**
  * Resolves one `(appName, slot)` pair to its fully-qualified key. Order:
@@ -34,43 +61,27 @@ function resolveKey(
   if (binding) {
     const local = app.localResources[binding.resourceName]
     if (local) {
-      return {
-        qualifiedKey: `${app.name}:${binding.resourceName}`,
-        type: local.type,
-        options: local.options,
-        ownerApp: app.name,
-      }
+      return toResolvedKey(
+        `${app.name}:${binding.resourceName}`,
+        local,
+        app.name,
+      )
     }
     const root = rootResources[binding.resourceName]
     if (root) {
-      return {
-        qualifiedKey: binding.resourceName,
-        type: root.type,
-        options: root.options,
-        ownerApp: null,
-      }
+      return toResolvedKey(binding.resourceName, root, null)
     }
     return undefined
   }
 
   const localBySlot = app.localResources[slot]
   if (localBySlot) {
-    return {
-      qualifiedKey: `${app.name}:${slot}`,
-      type: localBySlot.type,
-      options: localBySlot.options,
-      ownerApp: app.name,
-    }
+    return toResolvedKey(`${app.name}:${slot}`, localBySlot, app.name)
   }
 
   const rootBySlot = rootResources[slot]
   if (rootBySlot) {
-    return {
-      qualifiedKey: slot,
-      type: rootBySlot.type,
-      options: rootBySlot.options,
-      ownerApp: null,
-    }
+    return toResolvedKey(slot, rootBySlot, null)
   }
 
   const dependencyType = app.dependencies[slot]?.type
@@ -79,12 +90,7 @@ function resolveKey(
     : []
   if (matchingRootEntries.length === 1) {
     const [resourceName, resource] = matchingRootEntries[0]
-    return {
-      qualifiedKey: resourceName,
-      type: resource.type,
-      options: resource.options,
-      ownerApp: null,
-    }
+    return toResolvedKey(resourceName, resource, null)
   }
 
   return undefined

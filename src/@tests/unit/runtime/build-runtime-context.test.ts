@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { assert, assertEquals, assertStrictEquals } from '@std/assert'
 import { buildRuntimeContext } from 'modules/runtime/build-runtime-context.ts'
+import { setConfigOverride } from 'modules/runtime/config-overrides.ts'
 
 Deno.test('buildRuntimeContext - resource', () => {
   const def = {
@@ -33,6 +34,27 @@ Deno.test('buildRuntimeContext - config.get returns default', () => {
   const ctx = buildRuntimeContext(def, resources)
 
   assertEquals(ctx.config.get('port'), 8080)
+})
+
+Deno.test({
+  name:
+    'buildRuntimeContext - config.get prefers a live Config Plane override over the manifest default',
+  fn: () => {
+    const def = {
+      name: 'build-runtime-context-override-app',
+      config: {
+        port: {
+          default: 8080,
+        },
+      },
+    } as any
+
+    setConfigOverride('build-runtime-context-override-app', 'port', 9090)
+
+    const ctx = buildRuntimeContext(def, new Map())
+
+    assertEquals(ctx.config.get('port'), 9090)
+  },
 })
 
 Deno.test('buildRuntimeContext - config.get returns undefined for missing config', () => {

@@ -35,7 +35,11 @@ Deno.test(
     // already have run by now (its onStart has no await at all). Sequential means B must still
     // be untouched.
     await new Promise((resolve) => setTimeout(resolve, 0))
-    assertEquals(order, ['a-start'], "B must not run until A's onStart fully resolves")
+    assertEquals(
+      order,
+      ['a-start'],
+      "B must not run until A's onStart fully resolves",
+    )
 
     releaseA()
     await runPromise
@@ -104,13 +108,20 @@ Deno.test(
     const graph = buildGraph(
       [def],
       { db: { type: 'lifecycle-order-fake', options: {} } },
-      [{ appName: 'app-lifecycle-order', slot: 'database', resourceName: 'db' }],
+      [{
+        appName: 'app-lifecycle-order',
+        slot: 'database',
+        resourceName: 'db',
+      }],
     )
     const resources = await resolveResources(graph, registry)
 
     await runOnStop([def], resources)
 
-    assert(sawResourceDuringOnStop, 'onStop must see a real, resolved resource, not undefined')
+    assert(
+      sawResourceDuringOnStop,
+      'onStop must see a real, resolved resource, not undefined',
+    )
     assert(
       !closed,
       "must NOT be closed yet — runOnStop resolved, but registry.close() wasn't called",
@@ -118,6 +129,9 @@ Deno.test(
 
     await registry.close()
 
-    assert(closed, 'must be closed now, strictly AFTER runOnStop already resolved')
+    assert(
+      closed,
+      'must be closed now, strictly AFTER runOnStop already resolved',
+    )
   },
 )

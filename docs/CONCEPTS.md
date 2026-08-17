@@ -24,10 +24,10 @@ the default Application), whether or not that service ever declares a single Zan
 **`@zanix/app`'s `defineZanixApp`/`AppContainer`** — a composition STANDARD built on top of an
 Application, never a replacement for it. A Zanix App is
 `manifest + dependencies + resources +
-routes + jobs + events + lifecycle`:
+routes + jobs + operations + events + lifecycle`:
 
 ```
-defineZanixApp({ name, dependencies, resources, routes, config, jobs, events, setup, onStart, onStop })
+defineZanixApp({ name, dependencies, resources, routes, config, jobs, operations, events, setup, onStart, onStop })
                      |
                      v
         AppContainer.registerApp(definition, resources)

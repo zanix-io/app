@@ -22,21 +22,48 @@ export {
   type ZanixAppDefinition,
 } from 'modules/manifest/mod.ts'
 export { buildGraph, normalize, validate } from 'modules/manifest/mod.ts'
+// Type-only — `ServeOptions`/`ServeHandle` above reference these structurally, so JSR needs them
+// reachable from this entry point too. Erased at build time, so this does NOT pull `@zanix/server`
+// into this entry point's runtime dependency graph (see this module's own doc comment).
+export type {
+  ActivatedApps,
+  AnnouncedRemoteInstance,
+  HttpRemoteDispatcher,
+  RemoteCallerFactory,
+  ResourceRegistry,
+  ZanixAppServerOptions,
+} from 'modules/runtime/mod.ts'
 export type {
   AppDefinition,
   AppSetupContext,
   AppStartContext,
   AppStopContext,
+  BehaviorDeclaration,
+  BehaviorOverride,
   ConfigAccessor,
   ConfigValueType,
   DependencyDeclaration,
   DependencyGraph,
   EventsDeclaration,
   JobDefinitionEntry,
+  LocalResourceDeclaration,
+  McpToolDeclaration,
   NormalizedAppDefinition,
+  OperationDeclaration,
+  OperationHandler,
+  RemoteResourceDeclaration,
   ResolvedResourceKey,
+  ResolvedResourceKeyBase,
   ResourceBinding,
   ResourceDeclaration,
   RootResources,
   RuntimeContext,
+  RuntimeModeOptions,
+  SandboxDeclaration,
 } from 'typings/manifest.ts'
+export type {
+  DeploymentTarget,
+  EmbeddedDeploymentTarget,
+  RemoteDeploymentTarget,
+} from 'typings/deployment.ts'
+export type { RemoteAppHandle, RemoteCallOptions } from 'typings/remote.ts'

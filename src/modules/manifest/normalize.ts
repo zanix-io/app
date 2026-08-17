@@ -47,7 +47,10 @@ export function normalize(def: AppDefinition): NormalizedAppDefinition {
         `Zanix App "${def.name}": config."${key}" is "secret: true" and also declares a literal ` +
           `"default" — a secret must come from a host override or env var, never hardcoded in ` +
           `the manifest.`,
-        { code: 'SECRET_WITH_LITERAL_DEFAULT', meta: { source: 'zanix', name: def.name, key } },
+        {
+          code: 'SECRET_WITH_LITERAL_DEFAULT',
+          meta: { source: 'zanix', name: def.name, key },
+        },
       )
     }
 
@@ -61,17 +64,55 @@ export function normalize(def: AppDefinition): NormalizedAppDefinition {
 
   const jobs: NormalizedAppDefinition['jobs'] = {}
   for (const [jobName, job] of Object.entries(def.jobs ?? {})) {
-    jobs[jobName] = { ...job, schedule: job.schedule ?? null, isActive: job.isActive ?? true }
+    jobs[jobName] = {
+      ...job,
+      schedule: job.schedule ?? null,
+      isActive: job.isActive ?? true,
+    }
+  }
+
+  const operations: NormalizedAppDefinition['operations'] = {}
+  for (
+    const [operationName, declaration] of Object.entries(def.operations ?? {})
+  ) {
+    if (typeof declaration === 'function') {
+      operations[operationName] = {
+        handler: declaration,
+        sandbox: null,
+        allowedCallers: null,
+        mcp: null,
+      }
+    } else if ('sandbox' in declaration) {
+      operations[operationName] = {
+        handler: null,
+        sandbox: declaration.sandbox,
+        allowedCallers: declaration.allowedCallers ?? null,
+        mcp: declaration.mcp ?? null,
+      }
+    } else {
+      operations[operationName] = {
+        handler: declaration.handler,
+        sandbox: null,
+        allowedCallers: declaration.allowedCallers ?? null,
+        mcp: declaration.mcp ?? null,
+      }
+    }
   }
 
   return {
     name: def.name,
     version: def.version ?? null,
+    runtime: {
+      mode: def.runtime?.mode ?? 'embedded',
+      replicas: def.runtime?.replicas ?? null,
+    },
     routesPrefix,
     dependencies,
     config,
     jobs,
+    operations,
     events: def.events ?? {},
+    behaviors: def.behaviors ?? {},
     localResources: def.resources ?? {},
     rootDir: def.rootDir ?? '.',
     package: def.package ?? null,

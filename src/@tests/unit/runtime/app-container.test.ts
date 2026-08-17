@@ -23,7 +23,10 @@ Deno.test(
         sawResource = ctx.resource('database')
       },
     })
-    const resources = new Map([['app-setup-resource-test:database', 'the-real-instance']])
+    const resources = new Map([[
+      'app-setup-resource-test:database',
+      'the-real-instance',
+    ]])
 
     await registerApp(def, resources)
 
@@ -132,17 +135,23 @@ Deno.test(
 
     await registerApp(def, new Map())
 
-    assertEquals(getNamespacedJobOrigin('app-container-jobs-regression-test:syncProducts'), {
-      appName: 'app-container-jobs-regression-test',
-      originalName: 'syncProducts',
-    })
+    assertEquals(
+      getNamespacedJobOrigin('app-container-jobs-regression-test:syncProducts'),
+      {
+        appName: 'app-container-jobs-regression-test',
+        originalName: 'syncProducts',
+      },
+    )
   },
 )
 
 Deno.test(
   'registerApp: still registers a mount prefix without throwing (regression — setup(ctx) wiring must not break it)',
   async () => {
-    const def = normalize({ name: 'app-container-mount-regression-test', routes: true })
+    const def = normalize({
+      name: 'app-container-mount-regression-test',
+      routes: true,
+    })
 
     await registerApp(def, new Map()) // must not throw
   },

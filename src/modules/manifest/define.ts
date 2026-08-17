@@ -17,7 +17,9 @@ import { normalize } from './normalize.ts'
  * no matter what field names that shape happens to use — the distinction between the two must be
  * structural, never a field-shape heuristic that a coincidental rename could silently break.
  */
-export const ZANIX_APP_DEFINITION_BRAND: symbol = Symbol('zanix-app-definition')
+export const ZANIX_APP_DEFINITION_BRAND: symbol = Symbol(
+  'zanix-app-definition',
+)
 
 /** {@link ZanixAppDefinition.serve}'s options — the author's OWN local dev loop, never what a
  * real host passes (a host goes through `SetupOptions.apps`/`ZanixAppBootstrapOptions` instead).
@@ -84,11 +86,18 @@ export function defineZanixApp(def: AppDefinition): ZanixAppDefinition {
     [ZANIX_APP_DEFINITION_BRAND]: true,
     definition,
     serve: async (options = {}) => {
-      const { activateApps, bootstrapAppServer, deactivateApps, webServerManager } = await import(
+      const {
+        activateApps,
+        bootstrapAppServer,
+        deactivateApps,
+        webServerManager,
+      } = await import(
         'modules/runtime/mod.ts'
       )
 
-      const bindings: ResourceBinding[] = (options.uses ?? []).map((binding) => ({
+      const bindings: ResourceBinding[] = (options.uses ?? []).map((
+        binding,
+      ) => ({
         appName: definition.name,
         ...binding,
       }))
@@ -100,7 +109,11 @@ export function defineZanixApp(def: AppDefinition): ZanixAppDefinition {
         options.resources ?? {},
         bindings,
       )
-      const servers: ServerID[] = await bootstrapAppServer(definition.name, options.server, true)
+      const servers: ServerID[] = await bootstrapAppServer(
+        definition.name,
+        options.server,
+        true,
+      )
 
       return {
         activated,
@@ -121,7 +134,9 @@ export function defineZanixApp(def: AppDefinition): ZanixAppDefinition {
 /** Structural check for whether `value` came from {@link defineZanixApp} — how a host
  * distinguishes the new manifest form from the legacy `AppBootstrapOptions` shape in
  * `SetupOptions.apps`, without relying on field-shape heuristics. */
-export function isZanixAppDefinition(value: unknown): value is ZanixAppDefinition {
+export function isZanixAppDefinition(
+  value: unknown,
+): value is ZanixAppDefinition {
   return (
     typeof value === 'object' &&
     value !== null &&

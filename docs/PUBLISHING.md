@@ -55,7 +55,9 @@ await Zanix.start({
       uses: [{ slot: 'database', resourceName: 'mongo' }],
     },
   },
-  resources: { mongo: { type: 'mongo', options: { uri: 'mongodb://localhost' } } },
+  resources: {
+    mongo: { type: 'mongo', options: { uri: 'mongodb://localhost' } },
+  },
 })
 ```
 
@@ -112,7 +114,9 @@ before it ever leaves your machine:
 
 ```ts
 const handle = await reviewsApp.serve({
-  resources: { mongo: { type: 'mongo', options: { uri: 'mongodb://localhost' } } },
+  resources: {
+    mongo: { type: 'mongo', options: { uri: 'mongodb://localhost' } },
+  },
   uses: [{ slot: 'database', resourceName: 'mongo' }],
   server: { rest: { port: 4000 } },
 })

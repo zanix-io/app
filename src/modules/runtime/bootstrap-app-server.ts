@@ -12,7 +12,14 @@ import { bootstrapServers } from '@zanix/server'
  * separate forwarding path rather than flowing through the per-type loop below.
  */
 export type ZanixAppServerOptions =
-  & Partial<{ [K in WebServerTypes]: Omit<NonNullable<BootstrapServerOptions[K]>, 'application'> }>
+  & Partial<
+    {
+      [K in WebServerTypes]: Omit<
+        NonNullable<BootstrapServerOptions[K]>,
+        'application'
+      >
+    }
+  >
   & { health?: boolean | HealthOptions }
 
 /**

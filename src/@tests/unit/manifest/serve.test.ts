@@ -71,7 +71,9 @@ Deno.test(
     try {
       await new Promise((resolve) => setTimeout(resolve, 500))
 
-      const res = await fetch(`http://localhost:${PORT}/api/serve-reviews/endpoint/ping`)
+      const res = await fetch(
+        `http://localhost:${PORT}/api/serve-reviews/endpoint/ping`,
+      )
       assertEquals(res.status, 200)
       await res.body?.cancel()
     } finally {

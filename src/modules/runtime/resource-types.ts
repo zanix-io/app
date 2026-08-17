@@ -25,13 +25,22 @@ export type ResourceFactory = (
  * (`connector['close']()`) — not a workaround unique to this package.
  */
 const resourceTypeRegistry = new Map<string, ResourceFactory>([
-  ['mongo', (options) => new ZanixMongoConnector(options) as unknown as CloseableResource],
-  ['redis', (options) => new ZanixRedisConnector(options) as unknown as CloseableResource],
+  [
+    'mongo',
+    (options) => new ZanixMongoConnector(options) as unknown as CloseableResource,
+  ],
+  [
+    'redis',
+    (options) => new ZanixRedisConnector(options) as unknown as CloseableResource,
+  ],
 ])
 
 /** Registers `type`'s factory — last-write-wins, same as `registerApplicationMount`. Lets a host
  * (or another package) plug in a resource type this module never hardcoded. */
-export function registerResourceType(type: string, factory: ResourceFactory): void {
+export function registerResourceType(
+  type: string,
+  factory: ResourceFactory,
+): void {
   resourceTypeRegistry.set(type, factory)
 }
 

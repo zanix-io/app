@@ -14,6 +14,17 @@ jobs:
       contents: read # Allows reading of the repository's contents.
       id-token: write # Allows the creation of an ID token for authentication with JSR.
 
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
