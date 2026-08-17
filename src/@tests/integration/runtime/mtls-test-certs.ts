@@ -115,6 +115,10 @@ export async function generateMtlsTestCertChain(
       'client.csr',
       '-subj',
       '/CN=test-client',
+      '-addext',
+      'basicConstraints=CA:FALSE',
+      '-addext',
+      'extendedKeyUsage=clientAuth',
     ],
     dir,
   )
