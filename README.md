@@ -1,6 +1,7 @@
 # @zanix/app
 
 [![Version](https://img.shields.io/jsr/v/zanix/app?color=blue&label=jsr)](https://jsr.io/@zanix/app/versions)
+[![Release](https://img.shields.io/github/v/release/zanix-io/app?color=blue&label=git)](https://github.com/zanix-io/app/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 ## Table of Contents
