@@ -232,6 +232,26 @@ Deno.test(
 )
 
 Deno.test(
+  'release: a qualifiedKey whose original resolve() rejected (construction failed) is released ' +
+    'cleanly — no AggregateError, nothing to close (the promise itself never resolved to an ' +
+    'instance)',
+  async () => {
+    const registry = new ResourceRegistry()
+    const failure = new Error('construction failed')
+
+    // Swallow the expected rejection at the call site — same as `close()`'s own equivalent test
+    // ("a key whose construction itself rejected is skipped") — `release()` must still handle it
+    // gracefully internally regardless of whether the original caller awaited/caught it.
+    await registry
+      .resolve('never-built-then-released', () => Promise.reject(failure), 'app-a')
+      .catch(() => {})
+
+    // Must NOT throw — the rejected promise means there was never a real instance to close.
+    await registry.release('never-built-then-released', 'app-a')
+  },
+)
+
+Deno.test(
   "release: a resource's own close() failure surfaces as an AggregateError",
   async () => {
     const registry = new ResourceRegistry()
@@ -283,6 +303,8 @@ Deno.test(
       4,
       'the 5th factory must never run once the quota is hit',
     )
+    // Caller-expected control-flow (a host rejecting an over-quota tenant) — must NOT auto-log.
+    assertEquals((error as unknown as { _logged: boolean })._logged, false)
   },
 )
 

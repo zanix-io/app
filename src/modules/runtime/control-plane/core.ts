@@ -28,9 +28,19 @@ registerCoreProviderSlot('controlPlane', ZanixControlPlaneProvider, {
   sourcePackage: '@zanix/app/core',
 })
 
-const registerProvider = () => {
+/**
+ * Registers `ZanixControlPlaneCoreProvider` under the `'controlPlane'` core-provider slot. Already
+ * ran once, automatically, at import time (see below) — exported (not just auto-run) so a caller
+ * can re-register after clearing the `'type:provider'` registry
+ * (`ProgramModule.targets.resetContainer(['type:provider'])`, `@zanix/server`) without needing a
+ * fresh module evaluation of this file, kept consistent with every other `core.ts` loader's own
+ * callable, re-invokable registration function across the Zanix ecosystem (see
+ * `@zanix/datamaster`'s `storage/core.ts`'s own `registerSeaweedFSConnector` doc for the full
+ * reasoning that pattern exists for).
+ */
+export const registerControlPlaneProvider = (): void => {
   Provider('controlPlane')(ZanixControlPlaneCoreProvider)
 }
 
-const zanixControlPlaneProviderCore: void = registerProvider()
+const zanixControlPlaneProviderCore: void = registerControlPlaneProvider()
 export default zanixControlPlaneProviderCore

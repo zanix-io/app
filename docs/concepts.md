@@ -49,7 +49,7 @@ loop). The manifest is pure data: nothing in it imports `@zanix/server`, so a CL
 rule can type-check a manifest without pulling in a full web server.
 
 Distributing what you wrote as a package for a DIFFERENT team's host to install — as opposed to
-running it inside your own — is [`PUBLISHING.md`](./PUBLISHING.md)'s own scope, not this doc's.
+running it inside your own — is [`publishing.md`](./publishing.md)'s own scope, not this doc's.
 
 ## Consuming a Zanix App
 

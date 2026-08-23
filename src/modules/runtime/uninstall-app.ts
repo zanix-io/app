@@ -39,9 +39,11 @@ import { closeSandboxedWorkers } from './sandbox-operation.ts'
  * @param activated Whatever `activateApps`/`installApp` returned for the batch `appName` belongs
  * to.
  * @param appName The app to remove.
- * @throws {InternalError} `APP_NOT_INSTALLED` if `appName` isn't in `activated.apps`.
+ * @throws {InternalError} `APP_NOT_INSTALLED` if `appName` isn't in `activated.apps` —
+ * caller-expected control-flow, `shouldLog: false` (not auto-logged).
  * @throws {InternalError} `APP_STILL_REQUIRED` if another active app has a required `mode: 'remote'`
- * dependency pointing at `appName` — nothing is torn down in this case.
+ * dependency pointing at `appName` — nothing is torn down in this case. Caller-expected
+ * control-flow, `shouldLog: false` (not auto-logged).
  * @throws {AggregateError} (from `runOnStop`) if `appName`'s own `onStop` failed — resources are
  * still released regardless (`finally`), same ordering guarantee `deactivateApps` gives at the
  * whole-batch level, but this function still throws afterward rather than returning: the caller
@@ -60,7 +62,14 @@ export async function uninstallApp(
   if (!def) {
     throw new InternalError(
       `Zanix App "${appName}" is not active in this process — nothing to uninstall.`,
-      { code: 'APP_NOT_INSTALLED', meta: { source: 'zanix', appName } },
+      {
+        code: 'APP_NOT_INSTALLED',
+        // Caller-triggered, catchable-by-design: the caller asked to uninstall a name that isn't
+        // active (typo, race, already-removed) — the mirror of `installApp`'s `APP_ALREADY_INSTALLED`
+        // — the caller decides what to do with it. Not an internal fault.
+        shouldLog: false,
+        meta: { source: 'zanix', appName },
+      },
     )
   }
 
@@ -83,6 +92,11 @@ export async function uninstallApp(
             `("dependencies.${slot}") resolving to it.`,
           {
             code: 'APP_STILL_REQUIRED',
+            // Caller-triggered, catchable-by-design: a conflict guard on the caller's own requested
+            // action ("nothing is torn down in this case" — see this function's own doc) — the
+            // caller decides whether to uninstall the dependent app first or abort. Not an internal
+            // fault.
+            shouldLog: false,
             meta: { source: 'zanix', appName, dependentApp: otherName, slot },
           },
         )

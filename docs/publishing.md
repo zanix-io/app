@@ -87,7 +87,7 @@ If every field of your manifest is fixed at author time, export a plain constant
 anything depends on options only the HOST knows at composition time (credentials, which optional
 routes to register, per-instance identity), export a factory instead —
 `defineReviewsApp(options): ZanixAppDefinition`. See `@zanix/app`'s own
-[CONCEPTS.md § "Factory vs. pre-built manifest"](./CONCEPTS.md#factory-vs-pre-built-manifest--deciding-which-shape-to-export)
+[concepts.md § "Factory vs. pre-built manifest"](./concepts.md#factory-vs-pre-built-manifest--deciding-which-shape-to-export)
 for the deciding question and two real precedents (`@zanix/space`'s `defineSpaceApp()`,
 `@zanix/admin`'s `defineAdminHubApp`/`defineLocalAdminApp`).
 
@@ -127,6 +127,6 @@ await handle.stop()
 ## See also
 
 - [Main README](../README.md) — the full manifest reference, `defineZanixApp()`, `.serve()`.
-- [CONCEPTS.md](./CONCEPTS.md) — what a Zanix App is, the two layers, the consistency checklist for
+- [concepts.md](./concepts.md) — what a Zanix App is, the two layers, the consistency checklist for
   a NEW Zanix package (maintainer-facing, for anyone building inside this ecosystem specifically —
   this doc is for anyone publishing a Zanix App from anywhere).

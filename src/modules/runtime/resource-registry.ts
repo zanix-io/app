@@ -105,8 +105,9 @@ export class ResourceRegistry {
    * uniformly, quota check included) with {@link InternalError} `RESOURCE_QUOTA_EXCEEDED` if
    * `ownerApp` has a quota set (see {@link setQuota}) and referencing `qualifiedKey` would exceed
    * it — before `factory` ever runs, so a denied caller never pays construction cost for something
-   * it won't get to keep. Never rejected for a `qualifiedKey` `ownerApp` ALREADY references
-   * (re-resolving something you already hold never counts against your own quota again).
+   * it won't get to keep. Caller-expected control-flow, `shouldLog: false` (not auto-logged). Never
+   * rejected for a `qualifiedKey` `ownerApp` ALREADY references (re-resolving something you already
+   * hold never counts against your own quota again).
    * @returns The (memoized) instance, once `factory`'s promise settles.
    */
   public resolve<T>(
@@ -125,6 +126,12 @@ export class ResourceRegistry {
                 `reference "${qualifiedKey}".`,
               {
                 code: 'RESOURCE_QUOTA_EXCEEDED',
+                // Caller-triggered, catchable-by-design: a denied caller "never pays construction
+                // cost for something it won't get to keep" (see this method's own doc) — the quota
+                // mechanism exists precisely so a host can reject a misbehaving/greedy tenant's
+                // request and handle it (deny the install, surface a clean message), not so an
+                // operator needs a log line for every hit. Not an internal fault.
+                shouldLog: false,
                 meta: {
                   source: 'zanix',
                   ownerApp,

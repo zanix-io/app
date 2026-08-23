@@ -54,8 +54,26 @@ Deno.test(
     })
 
     try {
-      const auth = createServiceAuthClient({ serviceId: AGENT_ID })
       const base = `http://localhost:${PORT}/api/__zanix-mcp`
+
+      // Regression: `exchange` used to read `ctx.payload.body.assertion` unvalidated, so a
+      // missing/malformed request body surfaced as an unhandled 500 instead of a clean 400 — same
+      // fix as `remote-dispatch-route.ts`'s sibling `service-token` route (see
+      // `functional/runtime/service-token-exchange-validation.test.ts`), now applied here too via
+      // `ServiceTokenExchangeRTO` as the route's `Body` RTO.
+      const missingAssertion = await fetch(`${base}/service-token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      assertEquals(missingAssertion.status, 400)
+      await missingAssertion.body?.cancel()
+
+      const noBody = await fetch(`${base}/service-token`, { method: 'POST' })
+      assertEquals(noBody.status, 400)
+      await noBody.body?.cancel()
+
+      const auth = createServiceAuthClient({ serviceId: AGENT_ID })
       const headers = {
         'content-type': 'application/json',
         ...(await auth('__zanix-mcp', `${base}/service-token`)),

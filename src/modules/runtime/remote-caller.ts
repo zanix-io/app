@@ -49,8 +49,10 @@ export interface HttpRemoteDispatcher {
  * declared `allowedCallers` and `callerAppName` isn't in it (see
  * `operation-registry.ts`'s {@link isCallerAllowed}) — checked here, in-process, deliberately: the
  * same ACL applies whether the caller happens to be co-located or genuinely remote, so two
- * mutually-untrusted apps sharing a process can't bypass it just by being embedded together. A
- * REMOTE call's own equivalent check happens on the target's side, in
+ * mutually-untrusted apps sharing a process can't bypass it just by being embedded together.
+ * Caller-expected control-flow, `shouldLog: false` (not auto-logged) — same as the exact same ACL
+ * check's `HttpError`/protocol-error equivalents in `remote-dispatch-route.ts`/`mcp-server.ts`/
+ * `mtls-dispatch-server.ts`. A REMOTE call's own equivalent check happens on the target's side, in
  * `remote-dispatch-route.ts`'s `dispatch()`.
  */
 export function createRemoteCaller(
@@ -71,6 +73,13 @@ export function createRemoteCaller(
               `"${callerAppName}" isn't listed.`,
             {
               code: 'OPERATION_ACCESS_DENIED',
+              // Same ACL check as `remote-dispatch-route.ts`/`mcp-server.ts`/`mtls-dispatch-server.ts`
+              // — every one of those returns a controlled, non-logged rejection (`HttpError`
+              // `FORBIDDEN`, a protocol error, a plain 403) for the exact same condition. This is
+              // control-flow the caller is expected to catch (an unauthorized `ctx.remote()` call is
+              // a normal, expectable outcome of a manifest's own `allowedCallers` scoping), not an
+              // internal fault an operator needs surfaced in the log.
+              shouldLog: false,
               meta: {
                 source: 'zanix',
                 callerAppName,

@@ -1,0 +1,34 @@
+# .github/workflows/ci.yml
+
+name: CI
+
+on:
+  # Run on push or PRs to main branch
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+  # Also invocable as a reusable workflow (`uses: ./.github/workflows/ci.yml`) — `publish.yml`'s
+  # own `ci` job calls into this exact workflow instead of duplicating its steps.
+  workflow_call:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Allows reading of the repository's contents.
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Temporarily disabled: @zanix/cli check-cycles has not been published yet.
+      # - name: Check for circular-import hazards
+      #   run: deno run -A jsr:@zanix/cli check-cycles

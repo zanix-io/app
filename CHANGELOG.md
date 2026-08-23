@@ -7,6 +7,42 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-23
+
+### Added
+
+- **`registerControlPlaneProvider`** (`src/modules/runtime/control-plane/core.ts`), now exported —
+  reachable via `@zanix/app/core`. Still runs automatically once, at import time, exactly as before;
+  the new export lets a caller re-register after clearing the `'type:provider'` registry
+  (`ProgramModule.targets.resetContainer(['type:provider'])`, `@zanix/server`) without needing a
+  fresh module evaluation — for a config-reload in a long-running process, or a test simulating a
+  different state between cases. Same pattern adopted across `@zanix/datamaster`, `@zanix/auth`,
+  `@zanix/asyncmq`, and `@zanix/notifications` in the same batch of work.
+
+### Fixed
+
+- `deno lint`'s own `@zanix/utils` plugin (`deno-zanix-plugin`) is now version-pinned (`^3.0.0`),
+  matching every other `@zanix/utils` import in `deno.jsonc` — it used to resolve unpinned, so a
+  lint run could silently pick up a newer, unreviewed plugin version.
+- `POST /__zanix-ops/{appName}/service-token` (`remote-dispatch-route.ts`'s `exchange`) and
+  `POST /__zanix-mcp/service-token` (`mcp-route.ts`'s `exchange`) both crashed with an unhandled
+  `TypeError: Cannot read properties of undefined (reading 'assertion')` whenever the request body
+  couldn't be parsed (missing/wrong `Content-Type`, empty body, invalid JSON) — `ctx.payload.body`
+  was read directly with no `Body` RTO declared, so a bad request never got a clean `400`, just a
+  500. Both now validated against a new `ServiceTokenExchangeRTO` (`rtos/service-token.rto.ts`), the
+  same contract `@zanix/admin`'s own `ServiceExchangeRTO` already establishes for the equivalent
+  `/admin/service-token` REST route.
+  - New dependency: `@zanix/validator` (already published as part of `@zanix/utils`).
+- `buildSandboxedHandler` (`sandbox-operation.ts`): a `sandbox`-declared operation's own
+  `WorkerManager` (`@zanix/workers`) calls the global `Znx.logger` unconditionally whenever its
+  worker errors or times out, but nothing a `sandbox`-only app necessarily imports installs that
+  global first. Without it, `WorkerManager`'s own error/timeout handling threw a `ReferenceError`
+  inside its `worker.onmessage`/`onerror` callback — silently swallowed (an exception thrown while
+  already handling a Worker `error` event is never re-reported) — so `onFinish` never ran and the
+  operation's own `Promise` hung forever instead of ever rejecting `SANDBOX_TASK_FAILED`. Fixed by
+  importing `@zanix/logger` once, at module load, in `sandbox-operation.ts` itself, regardless of
+  whether the app declares any `sandbox` operations at all.
+
 ## [0.1.0] - 2026-08-17
 
 ### Added

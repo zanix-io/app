@@ -8,6 +8,7 @@ import {
 } from '@zanix/server'
 import { AuthTokenValidation, exchangeServiceCredential } from '@zanix/auth'
 import { handleMcpRequest, type JsonRpcRequest } from './mcp-server.ts'
+import { ServiceTokenExchangeRTO } from './rtos/service-token.rto.ts'
 
 /** The fixed Application identity + path segment for the aggregated MCP endpoint — a dedicated
  * Application (like `@zanix/admin`'s own), never namespaced under any one app's own mount prefix,
@@ -55,8 +56,10 @@ export async function registerMcpServer(): Promise<void> {
   await ProgramModule.defineApplication(MCP_APPLICATION, () => {
     @Controller({ prefix: '__zanix-mcp' })
     class _McpController extends ZanixController {
-      @Post('service-token')
-      public async exchange(ctx: HandlerContext): Promise<HandlerResponse> {
+      @Post('service-token', { Body: ServiceTokenExchangeRTO })
+      public async exchange(
+        ctx: HandlerContext<{ body: ServiceTokenExchangeRTO }>,
+      ): Promise<HandlerResponse> {
         const credential = await exchangeServiceCredential(
           ctx.payload.body.assertion,
         )

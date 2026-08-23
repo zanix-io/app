@@ -153,6 +153,8 @@ Deno.test(
       InternalError,
     )
     assertEquals((error as InternalError).code, 'APP_ALREADY_INSTALLED')
+    // Caller-expected control-flow (the caller already gets to catch this) — must NOT auto-log.
+    assertEquals((error as unknown as { _logged: boolean })._logged, false)
   },
 )
 
@@ -187,5 +189,8 @@ Deno.test(
       InternalError,
     )
     assertEquals((error as InternalError).code, 'RESOURCE_QUOTA_EXCEEDED')
+    // Caller-expected control-flow (a host rejecting an over-quota tenant install) — must NOT
+    // auto-log.
+    assertEquals((error as unknown as { _logged: boolean })._logged, false)
   },
 )

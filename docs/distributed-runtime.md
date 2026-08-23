@@ -63,6 +63,14 @@ down: `activateApps`'s `remoteInstances` parameter calls `registerInstance`/`der
 automatically on start/stop (see "Distributed lifecycle"), and the Gateway reads
 `getDeploymentTarget` to route a real request (see "Gateway").
 
+`import '@zanix/app/core'` registers the `'controlPlane'` core-provider slot exactly once, at import
+time. `registerControlPlaneProvider()` (also exported from `@zanix/app/core`) re-runs that same
+registration without needing a fresh module evaluation — for re-registering after clearing the
+`'type:provider'` registry (`ProgramModule.targets.resetContainer(['type:provider'])`,
+`@zanix/server`), e.g. a config-reload in a long-running process, or a test simulating a different
+state between cases. Application code never needs to call it directly in the common case — the
+side-effect import already covers that.
+
 ## `ctx.remote()` — Remote App Protocol (`./runtime`)
 
 The one surface a Zanix App uses to call ANOTHER Zanix App — same call whether the target is active
@@ -146,10 +154,10 @@ no-op, zero routes added, for one that doesn't.
 
 **Per-operation permission scoping (`allowedCallers`)** — capability-based, app-to-app
 authorization, the first of four related tracks toward a fuller platform story (see
-[Agent/MCP composability](./PLATFORM-FEATURES.md#agentmcp-composability-runtime),
-[Multi-tenancy & resource quotas](./PLATFORM-FEATURES.md#multi-tenancy--resource-quotas-runtime),
-and [Real sandboxing](./PLATFORM-FEATURES.md#real-sandboxing-runtime) in
-[Platform features](./PLATFORM-FEATURES.md)). An operation can restrict WHICH Zanix Apps may invoke
+[Agent/MCP composability](./platform-features.md#agentmcp-composability-runtime),
+[Multi-tenancy & resource quotas](./platform-features.md#multi-tenancy--resource-quotas-runtime),
+and [Real sandboxing](./platform-features.md#real-sandboxing-runtime) in
+[Platform features](./platform-features.md)). An operation can restrict WHICH Zanix Apps may invoke
 it:
 
 ```ts
@@ -481,8 +489,8 @@ unsatisfied, `INVALID_VERSION_RANGE` if either version string itself isn't valid
 
 - [Main README](../README.md) — local, single-process composition (`defineZanixApp()`,
   `AppContainer`, `ResourceRegistry`, `activateApps`/`deactivateApps`).
-- [Platform features](./PLATFORM-FEATURES.md) — hot install/uninstall, agent/MCP composability,
+- [Platform features](./platform-features.md) — hot install/uninstall, agent/MCP composability,
   multi-tenancy & resource quotas, real sandboxing, and standalone remote deployment.
-- [Concepts](./CONCEPTS.md) — what a Zanix App is, and how it relates to the rest of the Zanix
+- [Concepts](./concepts.md) — what a Zanix App is, and how it relates to the rest of the Zanix
   ecosystem.
-- [Publishing a Zanix App](./PUBLISHING.md) — distributing your own `defineZanixApp()` as a package.
+- [Publishing a Zanix App](./publishing.md) — distributing your own `defineZanixApp()` as a package.

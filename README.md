@@ -6,13 +6,13 @@
 
 ## Table of Contents
 
-0. [Concepts](./docs/CONCEPTS.md) — read this first if you're new to what a Zanix App is, or
+0. [Concepts](./docs/concepts.md) — read this first if you're new to what a Zanix App is, or
    reconciling an existing package's bespoke bootstrap with this standard.
-1. [Publishing a Zanix App](./docs/PUBLISHING.md) — read this if you're distributing YOUR app as a
+1. [Publishing a Zanix App](./docs/publishing.md) — read this if you're distributing YOUR app as a
    package for a different team's host to install.
-2. [Distributed runtime](./docs/DISTRIBUTED-RUNTIME.md) — Control Plane, `ctx.remote()`, distributed
+2. [Distributed runtime](./docs/distributed-runtime.md) — Control Plane, `ctx.remote()`, distributed
    lifecycle, leader election, Gateway, Remote Resource Binding.
-3. [Platform features](./docs/PLATFORM-FEATURES.md) — hot install/uninstall, agent/MCP
+3. [Platform features](./docs/platform-features.md) — hot install/uninstall, agent/MCP
    composability, multi-tenancy & resource quotas, real sandboxing, standalone remote deployment.
 4. [Description](#description)
 5. [Status](#status)
@@ -38,72 +38,81 @@ a Zanix Runtime, or, later, as its own distributed process.
 
 ## Status
 
-This package is under active construction. Implemented so far: `defineZanixApp()` (with `.serve()`,
-a local dev loop for running one app in isolation), the manifest types (including auto-bind: an
-explicit `uses` binding is only required when it's actually ambiguous — see `buildGraph`'s own doc),
-the pure half of `AppContainer` (`normalize`/`buildGraph`/`validate`), `ResourceRegistry`,
-`resolveResources` (with `'mongo'`/`'redis'` built-in resource types), `AppContainer.registerApp`
-(mount registration + job namespacing + the `setup(ctx)` callback), the lifecycle hooks
-`runOnStart`/`runOnStop`, and `activateApps`/`deactivateApps` (the reference sequence that chains
-all of the above for a full set of apps). `@zanix/core`'s own `Zanix.start()` calls `activateApps`
-for every `apps.<name>` entry, each shaped `{ definition, server?, uses? }` (a `defineZanixApp()`
-manifest). Also implemented: `ControlPlaneRegistry`/`ControlPlaneConfig`, a Redis-backed remote app
-Registry and hot-refresh Config Plane, DI-resolvable as `ZanixControlPlaneProvider` (the
-`'controlPlane'` core-provider slot, registered by the third entry point, `@zanix/app/core`) —
-reuses `this.cache.redis` rather than a second connection;
-`ctx.remote(name).call(operationName,
-payload, options)` — local-first (zero network when `name` is
-active in this same process), falling back to `HttpRemoteAdapter` (real HTTP, `@zanix/auth`
-service-token exchange, W3C `traceparent`, mandatory timeout) when it isn't, auto-detected from the
-DI slot above — an app declares what it exposes via manifest `operations` (see "Manifest
-reference"). Also implemented: `activateApps`'s `remoteInstances` parameter — an app announces
-itself to the Control Plane after its own `onStart` (heartbeat renewal + Config Plane hot-refresh
-subscription for non-secret keys), and deregisters BEFORE `onStop` on the way down; `ctx.config`
-reads the resulting hot-refresh overlay first; `HttpRemoteAdapter` can present a client TLS
-certificate covering both legs of a call, and a target can genuinely enforce the incoming half too
-via a dedicated `mtls-dispatch-server.ts` listener (see
-[Distributed lifecycle](./docs/DISTRIBUTED-RUNTIME.md#distributed-lifecycle-runtime) for what's
-narrow about it). Also implemented: a scheduled `jobs.<name>` entry automatically runs under
-Redis-backed leader election (only one replica per tick, fencing-token-validated) and
-`compareReplicas` checks a manifest's own `runtime.replicas` against what the Control Plane Registry
-actually observes (see
-[Leader election & replicas](./docs/DISTRIBUTED-RUNTIME.md#leader-election--replicas-runtime));
-`LeaderElection` itself scales to Redlock (majority quorum across several independent Redis
-instances) by passing an array instead of a single connector, same public API. Also implemented: a
-Gateway (`createGatewayPreHandler`) that routes PUBLIC/external traffic to a `remote` app — by name,
-or via a configured whole-domain default (see
-[Gateway](./docs/DISTRIBUTED-RUNTIME.md#gateway-runtime)); Remote Resource Binding
-(`resources.<slot>: {type, mode: 'remote', endpoint}`) resolves `ctx.resource(slot)` to a
-`RemoteAppHandle` instead of a real instance, reusing `ctx.remote()`'s own mechanism (see
-[Remote Resource Binding](./docs/DISTRIBUTED-RUNTIME.md#remote-resource-binding-runtime)). Also
-implemented: `installApp`/`uninstallApp` — hot install/uninstall of ONE app into an already-running
-process, scoped to routes + resources + operations (see
-[Hot install/uninstall](./docs/PLATFORM-FEATURES.md#hot-installuninstall-runtime)). Also
-implemented: per-operation permission scoping (`allowedCallers`) — an operation can restrict WHICH
-Zanix Apps may invoke it, checked at both the local-first and remote HTTP dispatch points against
-the calling app's own identity (see
-[`ctx.remote()`](./docs/DISTRIBUTED-RUNTIME.md#ctxremote--remote-app-protocol-runtime)'s own
-subsection). Also implemented: agent/MCP composability — an operation can opt into
-`mcp: {description,
-inputSchema}` to be exposed as a Model Context Protocol tool,
-discoverable/invocable by an AI agent through one aggregated, process-wide endpoint
-(`registerMcpServer`), reusing `allowedCallers` as-is for authorization (see
-[Agent/MCP composability](./docs/PLATFORM-FEATURES.md#agentmcp-composability-runtime)). Also
-implemented: multi-tenancy isolation (already worked via naming convention — see
-[Multi-tenancy & resource quotas](./docs/PLATFORM-FEATURES.md#multi-tenancy--resource-quotas-runtime))
-plus `ResourceRegistry.setQuota`/`InstallAppOptions.
-maxResources` — a hard ceiling on how many
-distinct resource instances one installed app may hold. Also implemented: real sandboxing — an
-`operations.<name>` entry can declare `sandbox` instead of `handler` to run inside its own
-dedicated, permission-restricted Deno Worker (see
-[Real sandboxing](./docs/PLATFORM-FEATURES.md#real-sandboxing-runtime)). Also implemented:
-`bootstrapRemoteApp` — a real, standalone remote-process entrypoint for a Zanix App (see
-[Standalone remote deployment](./docs/PLATFORM-FEATURES.md#standalone-remote-deployment-runtime)),
-and `@zanix/cli`'s `zanix prepare --docker -p app` scaffolding the rest (`serve.ts`, a matching
-`deno.json` `serve` task, a `Dockerfile`) — the DX/deploy pipeline track, independent of the 4
-"beyond VTEX" pillars above. Still missing: loading `rootDir`/`package` manifest files (an app
-installed from disk/a package specifier); hot install/uninstall of `jobs`/`events` (restart-only for
-now); an app catalog/marketplace. Nothing below documents a feature that doesn't exist yet.
+This package is under active construction. Only what's listed below is implemented — nothing below
+documents a feature that doesn't exist yet:
+
+- ✅ **`defineZanixApp()`** — with `.serve()`, a local dev loop for running one app in isolation —
+  and the manifest types, including auto-bind: an explicit `uses` binding is only required when it's
+  actually ambiguous (see `buildGraph`'s own doc).
+- ✅ **`AppContainer`** (pure half) — `normalize`/`buildGraph`/`validate`.
+- ✅ **`ResourceRegistry`**.
+- ✅ **`resolveResources`** — with `'mongo'`/`'redis'` built-in resource types.
+- ✅ **`AppContainer.registerApp`** — mount registration + job namespacing + the `setup(ctx)`
+  callback.
+- ✅ **`runOnStart`/`runOnStop`** — the lifecycle hooks.
+- ✅ **`activateApps`/`deactivateApps`** — the reference sequence that chains all of the above for a
+  full set of apps. `@zanix/core`'s own `Zanix.start()` calls `activateApps` for every `apps.<name>`
+  entry, each shaped `{ definition, server?, uses? }` (a `defineZanixApp()` manifest).
+- ✅ **`ControlPlaneRegistry`/`ControlPlaneConfig`** — a Redis-backed remote app Registry and
+  hot-refresh Config Plane, DI-resolvable as `ZanixControlPlaneProvider` (the `'controlPlane'`
+  core-provider slot, registered by the third entry point, `@zanix/app/core`) — reuses
+  `this.cache.redis` rather than a second connection.
+- ✅ **`ctx.remote(name).call(operationName, payload, options)`** — local-first (zero network when
+  `name` is active in this same process), falling back to `HttpRemoteAdapter` (real HTTP,
+  `@zanix/auth` service-token exchange, W3C `traceparent`, mandatory timeout) when it isn't,
+  auto-detected from the DI slot above — an app declares what it exposes via manifest `operations`
+  (see "Manifest reference").
+- ✅ **`activateApps`'s `remoteInstances` parameter** — an app announces itself to the Control Plane
+  after its own `onStart` (heartbeat renewal + Config Plane hot-refresh subscription for non-secret
+  keys), and deregisters BEFORE `onStop` on the way down; `ctx.config` reads the resulting
+  hot-refresh overlay first; `HttpRemoteAdapter` can present a client TLS certificate covering both
+  legs of a call, and a target can genuinely enforce the incoming half too via a dedicated
+  `mtls-dispatch-server.ts` listener (see
+  [Distributed lifecycle](./docs/distributed-runtime.md#distributed-lifecycle-runtime) for what's
+  narrow about it).
+- ✅ **Leader election for scheduled jobs** — a scheduled `jobs.<name>` entry automatically runs
+  under Redis-backed leader election (only one replica per tick, fencing-token-validated) and
+  `compareReplicas` checks a manifest's own `runtime.replicas` against what the Control Plane
+  Registry actually observes (see
+  [Leader election & replicas](./docs/distributed-runtime.md#leader-election--replicas-runtime));
+  `LeaderElection` itself scales to Redlock (majority quorum across several independent Redis
+  instances) by passing an array instead of a single connector, same public API.
+- ✅ **Gateway** (`createGatewayPreHandler`) — routes PUBLIC/external traffic to a `remote` app — by
+  name, or via a configured whole-domain default (see
+  [Gateway](./docs/distributed-runtime.md#gateway-runtime)).
+- ✅ **Remote Resource Binding** — `resources.<slot>: {type, mode: 'remote', endpoint}` resolves
+  `ctx.resource(slot)` to a `RemoteAppHandle` instead of a real instance, reusing `ctx.remote()`'s
+  own mechanism (see
+  [Remote Resource Binding](./docs/distributed-runtime.md#remote-resource-binding-runtime)).
+- ✅ **`installApp`/`uninstallApp`** — hot install/uninstall of ONE app into an already-running
+  process, scoped to routes + resources + operations (see
+  [Hot install/uninstall](./docs/platform-features.md#hot-installuninstall-runtime)).
+- ✅ **Per-operation permission scoping** (`allowedCallers`) — an operation can restrict WHICH Zanix
+  Apps may invoke it, checked at both the local-first and remote HTTP dispatch points against the
+  calling app's own identity (see
+  [`ctx.remote()`](./docs/distributed-runtime.md#ctxremote--remote-app-protocol-runtime)'s own
+  subsection).
+- ✅ **Agent/MCP composability** — an operation can opt into `mcp: {description, inputSchema}` to be
+  exposed as a Model Context Protocol tool, discoverable/invocable by an AI agent through one
+  aggregated, process-wide endpoint (`registerMcpServer`), reusing `allowedCallers` as-is for
+  authorization (see
+  [Agent/MCP composability](./docs/platform-features.md#agentmcp-composability-runtime)).
+- ✅ **Multi-tenancy isolation** — already worked via naming convention (see
+  [Multi-tenancy & resource quotas](./docs/platform-features.md#multi-tenancy--resource-quotas-runtime))
+  — plus `ResourceRegistry.setQuota`/`InstallAppOptions.maxResources`, a hard ceiling on how many
+  distinct resource instances one installed app may hold.
+- ✅ **Real sandboxing** — an `operations.<name>` entry can declare `sandbox` instead of `handler`
+  to run inside its own dedicated, permission-restricted Deno Worker (see
+  [Real sandboxing](./docs/platform-features.md#real-sandboxing-runtime)).
+- ✅ **`bootstrapRemoteApp`** — a real, standalone remote-process entrypoint for a Zanix App (see
+  [Standalone remote deployment](./docs/platform-features.md#standalone-remote-deployment-runtime)),
+  and `@zanix/cli`'s `zanix prepare --docker -p app` scaffolding the rest (`serve.ts`, a matching
+  `deno.json` `serve` task, a `Dockerfile`) — the DX/deploy pipeline track, independent of the 4
+  "beyond VTEX" pillars above.
+
+Still missing: loading `rootDir`/`package` manifest files (an app installed from disk/a package
+specifier); hot install/uninstall of `jobs`/`events` (restart-only for now); an app
+catalog/marketplace.
 
 ## Three entry points
 
@@ -113,7 +122,7 @@ import { ... } from '@zanix/app/runtime'  // AppContainer/ResourceRegistry/ctx �
                                            // @zanix/server (registering a real route/DI
                                            // resolution is @zanix/server's own job)
 import '@zanix/app/core'                  // side-effect only — zero-config Control Plane wiring
-                                           // (see docs/DISTRIBUTED-RUNTIME.md's "ctx.remote()");
+                                           // (see docs/distributed-runtime.md's "ctx.remote()");
                                            // never imported by `.`/`./runtime` themselves, so
                                            // nothing pays for it unless a host explicitly opts in
 ```
@@ -177,14 +186,14 @@ Implemented via a lazy `import('@zanix/app/runtime')` inside the method itself �
 | -------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`         | `string`                                                                | Required. Route namespace + resource-key prefix + job prefix — must match `^[a-z][a-z0-9-]*$`.                                                                                                                                                                                                                                                                                                                                                                        |
 | `version`      | `string?`                                                               | Stored only — no cross-app compatibility validation yet.                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `runtime`      | `{ mode?, replicas? }`                                                  | The author's own DEFAULT execution-mode suggestion (`mode: 'embedded'` default, or `'remote'`) — never a command the app executes; `replicas` is a policy hint the Control Plane compares against what's observed, never a number the app itself counts. See [Distributed lifecycle](./docs/DISTRIBUTED-RUNTIME.md#distributed-lifecycle-runtime) for what actually makes an instance `remote` at runtime (`activateApps`'s `remoteInstances`, not this field alone). |
+| `runtime`      | `{ mode?, replicas? }`                                                  | The author's own DEFAULT execution-mode suggestion (`mode: 'embedded'` default, or `'remote'`) — never a command the app executes; `replicas` is a policy hint the Control Plane compares against what's observed, never a number the app itself counts. See [Distributed lifecycle](./docs/distributed-runtime.md#distributed-lifecycle-runtime) for what actually makes an instance `remote` at runtime (`activateApps`'s `remoteInstances`, not this field alone). |
 | `routes`       | `true \| false \| { prefix }`                                           | `true` auto-prefixes with `name`; `false` registers no HTTP routes at all; `{ prefix: '' }` is an explicit opt-out of namespacing (distinct from `false` — the app still gets routes, just unprefixed).                                                                                                                                                                                                                                                               |
 | `dependencies` | `Record<slot, { type, required? }>`                                     | The closed, auditable set of resources this app can touch. Declares only the TYPE/shape needed, never a concrete resource name (that's the host's `uses`).                                                                                                                                                                                                                                                                                                            |
 | `config`       | `Record<key, { type, default?, required?, secret? }>`                   | App-local parameters. `secret: true` never accepts a literal `default`.                                                                                                                                                                                                                                                                                                                                                                                               |
 | `jobs`         | `Record<name, JobDefinitionEntry>`                                      | `JobDefinitionEntry` IS `@zanix/asyncmq`'s own `JobProcess` (`handler` + queue selection) plus its optional `schedule`/`isActive` — referenced via `import type`, never re-declared, so this package's job shape can never drift from the real one. Namespaced internally to `${appName}:${jobName}`; `schedule` present routes to `registerCronJob`, absent to `registerJob`.                                                                                        |
-| `operations`   | `Record<name, OperationHandler>`                                        | Named handlers OTHER Zanix Apps invoke via `ctx.remote(name).call(operationName, payload)` — see [`ctx.remote()`](./docs/DISTRIBUTED-RUNTIME.md#ctxremote--remote-app-protocol-runtime). Separate from `routes`: never namespaced by path, never HTTP-shaped on the author's side.                                                                                                                                                                                    |
+| `operations`   | `Record<name, OperationHandler>`                                        | Named handlers OTHER Zanix Apps invoke via `ctx.remote(name).call(operationName, payload)` — see [`ctx.remote()`](./docs/distributed-runtime.md#ctxremote--remote-app-protocol-runtime). Separate from `routes`: never namespaced by path, never HTTP-shaped on the author's side.                                                                                                                                                                                    |
 | `events`       | `Record<name, {}>`                                                      | Declared, untyped payload for now.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `resources`    | `Record<slot, { type, options } \| { type, mode: 'remote', endpoint }>` | Local resources — shadows a root resource of the same name, only for slots also listed in `dependencies`. `mode: 'remote'` resolves to an RPC handle instead of a real instance — see [Remote Resource Binding](./docs/DISTRIBUTED-RUNTIME.md#remote-resource-binding-runtime).                                                                                                                                                                                       |
+| `resources`    | `Record<slot, { type, options } \| { type, mode: 'remote', endpoint }>` | Local resources — shadows a root resource of the same name, only for slots also listed in `dependencies`. `mode: 'remote'` resolves to an RPC handle instead of a real instance — see [Remote Resource Binding](./docs/distributed-runtime.md#remote-resource-binding-runtime).                                                                                                                                                                                       |
 | `behaviors`    | `Record<name, { default, description? }>`                               | Pure function/strategy slots a host can override — no construction, no `close()`, no health-gating, unlike `resources`. See "`ctx.behavior()` — behavior overrides" below.                                                                                                                                                                                                                                                                                            |
 | `rootDir`      | `string?`                                                               | Relative to the resolved package location (if `package` is set) or the host's cwd.                                                                                                                                                                                                                                                                                                                                                                                    |
 | `package`      | `string?`                                                               | Package specifier for a distributed app, loaded via `import(packageSpecifier)`.                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -461,7 +470,7 @@ should have been reused:
 | Change ONE VALUE, no code involved?                                              | `config`                                                                                                                                                                                                 |
 | Replace a SERVICE with a real lifecycle (a connection, an authenticated client)? | `resources`/`dependencies`/`uses` + `registerResourceType`                                                                                                                                               |
 | Replace a PURE FUNCTION (no lifecycle)?                                          | `behaviors` + `ctx.behavior()`                                                                                                                                                                           |
-| Add NEW behavior that doesn't replace anything existing?                         | A second Zanix App, composed alongside the base one (see `activateApps` above and [`ctx.remote()`](./docs/DISTRIBUTED-RUNTIME.md#ctxremote--remote-app-protocol-runtime)) — never a fork of the base app |
+| Add NEW behavior that doesn't replace anything existing?                         | A second Zanix App, composed alongside the base one (see `activateApps` above and [`ctx.remote()`](./docs/distributed-runtime.md#ctxremote--remote-app-protocol-runtime)) — never a fork of the base app |
 
 `resources` and `behaviors` look similar (both are host-suppliable overrides resolved through
 `ctx`), but exist for genuinely different needs — forcing a pure function through `resources` (a
@@ -534,7 +543,7 @@ rather than something that needs its own full section:
 | `resolveTarget(appName, Target)`                                      | Backs `ctx.resolve(Target)` — sugar over `ProgramModule.getInteractors`/`getProviders`/`getConnectors`, dispatched by which of `@Interactor`/`@Provider`/`@Connector` `Target` extends. Throws `UNRESOLVABLE_TARGET` for a class extending none of them.                                                                                                       |
 | `getResourceFactory(type)`                                            | Reads back a resource type's registered factory (built-in `'mongo'`/`'redis'`, or anything `registerResourceType` added) — `undefined` if `type` was never registered.                                                                                                                                                                                         |
 | `getNamespacedJobOrigin(namespacedName)`                              | Resolves a namespaced job name (`${appName}:${jobName}`) back to the app/original job name it came from — `undefined` if never registered via `registerApp`.                                                                                                                                                                                                   |
-| `getConfigOverride(appName, key)` / `hasConfigOverride(appName, key)` | The same Config Plane overlay `ctx.config.get`/`.has` already read from (see [Distributed lifecycle](./docs/DISTRIBUTED-RUNTIME.md#distributed-lifecycle-runtime)) — useful from OUTSIDE a `RuntimeContext` (e.g. a health-check job). `setConfigOverride` is called internally by the Config Plane subscription callback, never by application code directly. |
+| `getConfigOverride(appName, key)` / `hasConfigOverride(appName, key)` | The same Config Plane overlay `ctx.config.get`/`.has` already read from (see [Distributed lifecycle](./docs/distributed-runtime.md#distributed-lifecycle-runtime)) — useful from OUTSIDE a `RuntimeContext` (e.g. a health-check job). `setConfigOverride` is called internally by the Config Plane subscription callback, never by application code directly. |
 | `generateTraceparent()`                                               | Generates a fresh W3C `traceparent` value — the same one `HttpRemoteAdapter` propagates on every outgoing call.                                                                                                                                                                                                                                                |
 | `isZanixAppDefinition(value)`                                         | Type guard for whatever `defineZanixApp()` returns — the supported way to check an unknown value is a `ZanixAppDefinition`, rather than reading its brand field directly.                                                                                                                                                                                      |
 

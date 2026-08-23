@@ -205,6 +205,7 @@ Deno.test(
       timeoutConnection: 5,
       retryInterval: 1,
       isHealthy: () => false,
+      coreDisplayName: () => 'fake-never-healthy',
     }))
 
     const registry = new ResourceRegistry()

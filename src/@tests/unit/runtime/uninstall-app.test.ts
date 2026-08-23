@@ -4,6 +4,7 @@ import { activateApps } from 'modules/runtime/activate-apps.ts'
 import { installApp } from 'modules/runtime/install-app.ts'
 import { uninstallApp } from 'modules/runtime/uninstall-app.ts'
 import { registerResourceType } from 'modules/runtime/resource-types.ts'
+import type { AnnouncedRemoteInstance } from 'modules/runtime/remote-lifecycle.ts'
 import type { RootResources } from 'typings/manifest.ts'
 
 console.error = () => {}
@@ -137,6 +138,106 @@ Deno.test(
     )
     assertEquals((error as InternalError).code, 'APP_STILL_REQUIRED')
     assertEquals(onStopCalls, 0, "the blocked app's onStop must never run")
+    // Caller-expected control-flow (a conflict guard on the caller's own requested action) — must
+    // NOT auto-log.
+    assertEquals((error as unknown as { _logged: boolean })._logged, false)
+  },
+)
+
+Deno.test(
+  "uninstallApp: stops ONLY the target app's own announced Control Plane instance — a " +
+    "different app's announcement survives untouched in the returned ActivatedApps",
+  async () => {
+    // Pre-existing gap, unrelated to this PR's own diff: real coverage data showed
+    // `activated.announced`'s own loop (`for (const instance of activated.announced)`) had NEVER
+    // run its body in any existing test — every prior `uninstallApp` test left `announced` empty.
+    // Builds `AnnouncedRemoteInstance` fixtures directly (see `remote-lifecycle.test.ts`'s own
+    // precedent for stubbing this exact shape) rather than going through `activateApps`'s
+    // `remoteInstances` option, which would require a real `ControlPlaneRegistry`/Redis for a
+    // unit-tier test.
+    const activated = await activateApps([
+      { name: 'uninstall-app-announced-target' },
+      { name: 'uninstall-app-announced-other' },
+    ])
+
+    let targetStopped = false
+    let otherStopped = false
+    const announced: AnnouncedRemoteInstance[] = [
+      {
+        appName: 'uninstall-app-announced-target',
+        instanceId: 'inst-target',
+        stop: () => {
+          targetStopped = true
+          return Promise.resolve()
+        },
+      },
+      {
+        appName: 'uninstall-app-announced-other',
+        instanceId: 'inst-other',
+        stop: () => {
+          otherStopped = true
+          return Promise.resolve()
+        },
+      },
+    ]
+
+    const next = await uninstallApp(
+      { ...activated, announced },
+      'uninstall-app-announced-target',
+    )
+
+    assert(targetStopped, "the target app's own announced instance must be stopped")
+    assert(!otherStopped, "a different app's announced instance must never be touched")
+    assertEquals(next.announced.map((instance) => instance.appName), [
+      'uninstall-app-announced-other',
+    ])
+  },
+)
+
+Deno.test(
+  'uninstallApp: an app with its own mode: "remote" dependency is uninstalled cleanly — ' +
+    'registry.release() is never called for it (nothing was ever registered in the ' +
+    'ResourceRegistry for a remote-mode resource)',
+  async () => {
+    // Pre-existing gap, unrelated to this PR's own diff: real coverage data showed the
+    // `if (resolvedKey.mode === 'remote') continue` guard inside the post-onStop release loop had
+    // never actually skipped anything in any existing test — every prior test's target app had
+    // only LOCAL resolved dependencies.
+    const activated = await activateApps(
+      [{
+        name: 'uninstall-app-remote-dep',
+        dependencies: { billing: { type: 'billing-service' } },
+      }],
+      {
+        billingRemote: {
+          type: 'billing-service',
+          mode: 'remote',
+          endpoint: 'uninstall-app-remote-dep-target',
+        },
+      },
+      [{
+        appName: 'uninstall-app-remote-dep',
+        slot: 'billing',
+        resourceName: 'billingRemote',
+      }],
+    )
+
+    const releasedKeys: string[] = []
+    const originalRelease = activated.registry.release.bind(activated.registry)
+    activated.registry.release = ((qualifiedKey: string, ownerApp: string) => {
+      releasedKeys.push(qualifiedKey)
+      return originalRelease(qualifiedKey, ownerApp)
+    }) as typeof activated.registry.release
+
+    const next = await uninstallApp(activated, 'uninstall-app-remote-dep')
+
+    assertEquals(next.apps.length, 0)
+    assertEquals(
+      releasedKeys,
+      [],
+      'a mode: "remote" dependency was never registered in the ResourceRegistry — release() ' +
+        'must never be called for it',
+    )
   },
 )
 
@@ -148,6 +249,8 @@ Deno.test('uninstallApp: throws APP_NOT_INSTALLED for an app that is not active'
     InternalError,
   )
   assertEquals((error as InternalError).code, 'APP_NOT_INSTALLED')
+  // Caller-expected control-flow (the caller already gets to catch this) — must NOT auto-log.
+  assertEquals((error as unknown as { _logged: boolean })._logged, false)
 })
 
 Deno.test(

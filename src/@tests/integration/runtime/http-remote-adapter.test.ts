@@ -1,10 +1,11 @@
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { generateRSAKeys } from '@zanix/helpers'
+import { createJWT } from '@zanix/auth'
 import { InternalError } from '@zanix/errors'
 import { ZanixRedisConnector } from '@zanix/datamaster'
 import { defineZanixApp } from 'modules/manifest/mod.ts'
 import { ControlPlaneRegistry } from 'modules/runtime/control-plane/mod.ts'
-import { HttpRemoteAdapter } from 'modules/runtime/http-remote-adapter.ts'
+import { HttpRemoteAdapter, OPERATIONS_PATH_SEGMENT } from 'modules/runtime/http-remote-adapter.ts'
 
 console.info = () => {}
 console.error = () => {}
@@ -262,6 +263,79 @@ Deno.test(
     } finally {
       Deno.env.delete(`JWK_PRI_${CALLER_APP}`)
       Deno.env.delete(`JWK_PUB_${CALLER_APP}`)
+      Deno.env.delete('JWK_PRI')
+      Deno.env.delete('JWK_PUB')
+    }
+  },
+)
+
+Deno.test(
+  "HttpRemoteAdapter (raw HTTP, bypassing the adapter's own exchange): a validly-signed " +
+    "'type: api' token with NO `sub` claim at all is denied for an ACL-scoped operation — " +
+    "callerAppName resolves to undefined, `?? ''` never accidentally matches a real " +
+    'allowedCallers entry — real RSA signature, real HTTP',
+  async () => {
+    // Regression for `remote-dispatch-route.ts`'s `dispatch()`:
+    // `const callerAppName = (ctx.locals.session ?? ctx.session)?.subject as string | undefined`
+    // then `isCallerAllowed(local.allowedCallers, callerAppName ?? '')`. This is genuinely
+    // reachable, not defensive-only dead code: `@AuthTokenValidation({type: 'api'})` never
+    // requires a `sub` claim to be present (see `@zanix/auth`'s own `verifyJWT` — `sub` is only
+    // checked when an EXPECTED value is passed, which this route never does, and no
+    // `x-znx-api-id`-style client-subject header/cookie is sent by a real caller either) — only
+    // signature/`iss`/`exp`/`aud` are enforced. Every token minted through the intended flow
+    // (`exchangeServiceCredential` → `createAppToken`) always sets `subject`, but `@AuthTokenValidation`
+    // itself accepts ANY signature-valid `type: 'api'` token regardless of how it was minted — so a
+    // token that's real (signed with this same process's own `JWK_PRI`, matching `JWK_PUB`) but
+    // simply never carried a `sub` claim is a real, reachable shape reaching `dispatch()`, not a
+    // hypothetical.
+    const appKeys = await generateRSAKeys()
+    Deno.env.set('JWK_PRI', btoa(appKeys.privateKey))
+    Deno.env.set('JWK_PUB', btoa(appKeys.publicKey))
+
+    const targetApp = 'http-adapter-target-no-subject'
+    const port = 4725
+
+    try {
+      await withServedTarget(targetApp, port, async () => {
+        // Signed directly with the SAME key `createAppToken` uses for every `type: 'api'` token
+        // this process mints (`JWK_PRI`) — a real signature, deliberately built without going
+        // through `exchangeServiceCredential`/`createAppToken` (both always set `sub`), so `sub`
+        // is absent from the payload entirely. `rateLimit` IS set (unlike `sub`) — deliberately,
+        // so this exercises ONLY the `sub`-less branch inside `dispatch()`, not
+        // `jwtValidationGuard`'s OWN unrelated `rateLimitGuard` 401 (wrapped as a same-shaped 403
+        // "You do not have access to this resource" by `@zanix/server`'s guard-error handling) —
+        // confirmed by hand that omitting `rateLimit` here produces that DIFFERENT 403 instead,
+        // one that never even reaches `dispatch()`'s body at all (a real trap: both look like a
+        // passing "403" assertion, only one of them actually exercises the branch under test).
+        const noSubjectToken = await createJWT({ rateLimit: 100 }, appKeys.privateKey, {
+          algorithm: 'RS256',
+          expiration: '5m',
+        })
+
+        const response = await fetch(
+          `http://localhost:${port}/api/${OPERATIONS_PATH_SEGMENT}/${targetApp}/secretmine`,
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'X-Znx-Authorization': `Bearer ${noSubjectToken}`,
+            },
+            body: '{}',
+          },
+        )
+        assertEquals(response.status, 403)
+        const body = await response.json()
+        // Proves this is `dispatch()`'s OWN `isCallerAllowed` rejection (real `callerAppName`
+        // undefined, stringified as "undefined" in the message), not some other, differently-caused
+        // 403 that happens to share the same status code.
+        assert(
+          typeof body.message === 'string' && body.message.includes('"undefined"'),
+          `expected dispatch()'s own callerAppName-undefined rejection, got: ${
+            JSON.stringify(body)
+          }`,
+        )
+      })
+    } finally {
       Deno.env.delete('JWK_PRI')
       Deno.env.delete('JWK_PUB')
     }

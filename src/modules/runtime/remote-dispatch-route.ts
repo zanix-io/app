@@ -10,6 +10,7 @@ import { AuthTokenValidation, exchangeServiceCredential } from '@zanix/auth'
 import { HttpError, InternalError } from '@zanix/errors'
 import { getLocalOperation, isCallerAllowed } from './operation-registry.ts'
 import { OPERATIONS_PATH_SEGMENT, SERVICE_TOKEN_PATH_SEGMENT } from './http-remote-adapter.ts'
+import { ServiceTokenExchangeRTO } from './rtos/service-token.rto.ts'
 
 /**
  * Registers the two routes an app needs to be callable over HTTP by `HttpRemoteAdapter` — a
@@ -54,8 +55,10 @@ export function registerRemoteDispatchRoutes(
 
   @Controller({ prefix: `${OPERATIONS_PATH_SEGMENT}/${appName}` })
   class _RemoteDispatchController extends ZanixController {
-    @Post(SERVICE_TOKEN_PATH_SEGMENT)
-    public async exchange(ctx: HandlerContext): Promise<HandlerResponse> {
+    @Post(SERVICE_TOKEN_PATH_SEGMENT, { Body: ServiceTokenExchangeRTO })
+    public async exchange(
+      ctx: HandlerContext<{ body: ServiceTokenExchangeRTO }>,
+    ): Promise<HandlerResponse> {
       const credential = await exchangeServiceCredential(
         ctx.payload.body.assertion,
       )

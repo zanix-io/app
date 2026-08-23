@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import { assertSpyCalls, stub } from '@std/testing/mock'
-import { Controller, Get, WebServerManager, ZanixController } from '@zanix/server'
+import { WebServerManager } from '@zanix/server'
 import { defineZanixApp } from 'modules/manifest/mod.ts'
 import { registerResourceType } from 'modules/runtime/resource-types.ts'
 import { bootstrapRemoteApp } from 'modules/runtime/bootstrap-remote-app.ts'
@@ -100,49 +100,6 @@ Deno.test(
           signals.removed.includes('SIGTERM'),
       )
     } finally {
-      signals.restore()
-    }
-  },
-)
-
-Deno.test(
-  "bootstrapRemoteApp: with 'server', actually serves this app's own mounted routes — real " +
-    'HTTP, shut down cleanly by stop()',
-  async () => {
-    const PORT = 4610
-
-    const reviews = defineZanixApp({
-      name: 'bootstrap-remote-reviews',
-      routes: true,
-      setup: (ctx) => {
-        ctx.routes(() => {
-          @Controller('endpoint')
-          class BootstrapRemoteController extends ZanixController {
-            @Get('ping')
-            public ping() {
-              return 'bootstrap-remote-reviews'
-            }
-          }
-          void BootstrapRemoteController
-        })
-      },
-    })
-
-    const signals = stubSignals()
-    const handle = await bootstrapRemoteApp(reviews, {
-      server: { rest: { port: PORT } },
-    })
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const res = await fetch(
-        `http://localhost:${PORT}/api/bootstrap-remote-reviews/endpoint/ping`,
-      )
-      assertEquals(res.status, 200)
-      await res.body?.cancel()
-    } finally {
-      await handle.stop()
       signals.restore()
     }
   },

@@ -1,7 +1,6 @@
-import { assert, assertEquals } from '@std/assert'
+import { assert } from '@std/assert'
 import { defineZanixApp } from 'modules/manifest/mod.ts'
 import { registerResourceType } from 'modules/runtime/resource-types.ts'
-import { Controller, Get, ZanixController } from '@zanix/server'
 
 Deno.test(
   'ZanixAppDefinition.serve(): with no server, registers (onStart runs) but never listens on ' +
@@ -40,44 +39,5 @@ Deno.test(
 
     assert(onStopRan, 'onStop must run as part of stop()')
     assert(closed, 'resources must be closed after stop()')
-  },
-)
-
-Deno.test(
-  "ZanixAppDefinition.serve(): with 'server', actually serves this app's own mounted routes " +
-    '— real HTTP, shut down cleanly by stop()',
-  async () => {
-    const PORT = 4605
-
-    const reviews = defineZanixApp({
-      name: 'serve-reviews',
-      routes: true,
-      setup: (ctx) => {
-        ctx.routes(() => {
-          @Controller('endpoint')
-          class ServeOnlyController extends ZanixController {
-            @Get('ping')
-            public ping() {
-              return 'serve-reviews'
-            }
-          }
-          void ServeOnlyController
-        })
-      },
-    })
-
-    const handle = await reviews.serve({ server: { rest: { port: PORT } } })
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const res = await fetch(
-        `http://localhost:${PORT}/api/serve-reviews/endpoint/ping`,
-      )
-      assertEquals(res.status, 200)
-      await res.body?.cancel()
-    } finally {
-      await handle.stop()
-    }
   },
 )

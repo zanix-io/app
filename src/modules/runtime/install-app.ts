@@ -65,14 +65,15 @@ export interface InstallAppOptions {
  * @param def The app to install — raw `AppDefinition` (normalized here) or `defineZanixApp()`'s
  * own return value (used as-is).
  * @param options See {@link InstallAppOptions}.
- * @throws {InternalError} `APP_ALREADY_INSTALLED` if `def.name` is already active in `activated`.
+ * @throws {InternalError} `APP_ALREADY_INSTALLED` if `def.name` is already active in `activated` —
+ * caller-expected control-flow, `shouldLog: false` (not auto-logged).
  * @throws {InternalError} (from `validate()`) if the new app's contract is violated, OR if adding
  * it breaks an existing app's own contract (e.g. a `requiredVersion` now failing against this
  * app's own `version`) — thrown BEFORE resolving or registering anything, same fail-fast guarantee
  * `activateApps` itself gives for a whole batch.
  * @throws {InternalError} (from `ResourceRegistry.resolve`) `RESOURCE_QUOTA_EXCEEDED` if
  * `options.maxResources` is given and this app's own resources need more distinct instances than
- * that ceiling allows.
+ * that ceiling allows — caller-expected control-flow, `shouldLog: false` (not auto-logged).
  * @returns A new `ActivatedApps` — the input `activated` is never mutated in place.
  */
 export async function installApp(
@@ -87,6 +88,10 @@ export async function installApp(
       `Zanix App "${normalized.name}" is already active in this process — uninstall it first.`,
       {
         code: 'APP_ALREADY_INSTALLED',
+        // Caller-triggered, catchable-by-design: the caller asked to install a name that's already
+        // active — the caller decides what to do (skip, uninstall first, surface to its own user),
+        // exactly the way it would for any other "already exists" conflict. Not an internal fault.
+        shouldLog: false,
         meta: { source: 'zanix', appName: normalized.name },
       },
     )

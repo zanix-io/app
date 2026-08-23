@@ -116,6 +116,10 @@ Deno.test(
 
     assertEquals((error as InternalError).code, 'OPERATION_ACCESS_DENIED')
     assertEquals(handlerCalls, 0)
+    // Caller-expected control-flow (same ACL check as the HttpError/protocol-error equivalents in
+    // remote-dispatch-route.ts/mcp-server.ts/mtls-dispatch-server.ts, none of which auto-log) —
+    // must NOT auto-log.
+    assertEquals((error as unknown as { _logged: boolean })._logged, false)
   },
 )
 

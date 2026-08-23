@@ -11,7 +11,15 @@
  *
  * @module
  */
-import 'modules/runtime/control-plane/core.ts'
+export {
+  /** Re-registers `ZanixControlPlaneProvider` under the `'controlPlane'` core-provider slot —
+   * callable again after clearing the `'type:provider'` registry
+   * (`ProgramModule.targets.resetContainer(['type:provider'])`, `@zanix/server`), without needing a
+   * fresh module evaluation of this file. Already ran once, automatically, by importing this module
+   * — same reasoning `@zanix/datamaster`'s own `storage/core.ts` (`registerS3Connector`)
+   * documents in full. */
+  registerControlPlaneProvider,
+} from 'modules/runtime/control-plane/core.ts'
 
 export {
   /** Redis-backed Config Plane half of the Control Plane — hot-refresh of non-secret app config

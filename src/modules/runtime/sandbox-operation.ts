@@ -1,6 +1,21 @@
 import type { OperationHandler, SandboxDeclaration } from 'typings/manifest.ts'
 import { InternalError } from '@zanix/errors'
 import { WorkerManager } from '@zanix/workers'
+// Side-effect only: `@zanix/workers`'s own `WorkerManager` unconditionally calls the GLOBAL
+// `Znx.logger` (never imports a logger module itself) whenever a task errors, times out, or the
+// worker itself errors — it assumes some other part of the process already installed that global
+// by importing `@zanix/logger` first. Nothing else a `sandbox`-only app necessarily imports does
+// that (this module's own `@zanix/errors` import doesn't — see that package's own `main.ts` doc on
+// why it deliberately avoids it, to dodge an import cycle). Without this, `Znx` is `undefined`, so
+// `WorkerManager`'s error/timeout paths throw a `ReferenceError` INSIDE its own `worker.onmessage`/
+// `worker.onerror` handlers, before ever reaching `onFinish` — silently swallowed by the Worker
+// error-event dispatch itself (an exception thrown while handling an already-`error` event is
+// never re-reported, to avoid infinite recursion), so `onFinish` is never called and the
+// `Promise` `buildSandboxedHandler` returns hangs forever instead of ever rejecting
+// `SANDBOX_TASK_FAILED`. Importing this here — once, at module load, regardless of whether this
+// app declares any `sandbox` operations at all — guarantees the global exists before any
+// `WorkerManager` this module creates can ever report a failure.
+import '@zanix/logger'
 
 /**
  * `appName -> every WorkerManager this app's own sandboxed operations created` — the only

@@ -343,14 +343,14 @@ before running so a second signal (or a caller-invoked `stop()`) can never doubl
 overwriting an existing customization), and a `Dockerfile` whose `CMD ["task", "serve"]` runs it —
 sharing the exact same template `'server'`-type projects use (`FROM`/`WORKDIR`/`ENV`/`COPY`/
 `EXPOSE`/`CMD ["task", ...]`), differing only in which file gets cached and which task name the
-`CMD` runs. See `@zanix/cli`'s own `docs/prepare.md`/`docs/DEPLOY.md` for the full CLI-side detail.
+`CMD` runs. See `@zanix/cli`'s own `docs/prepare.md`/`docs/deploy.md` for the full CLI-side detail.
 
 ## See also
 
 - [Main README](../README.md) — local, single-process composition (`defineZanixApp()`,
   `AppContainer`, `ResourceRegistry`, `activateApps`/`deactivateApps`).
-- [Distributed runtime](./DISTRIBUTED-RUNTIME.md) — remote app discovery, `ctx.remote()`,
+- [Distributed runtime](./distributed-runtime.md) — remote app discovery, `ctx.remote()`,
   distributed lifecycle, leader election, Gateway, Remote Resource Binding.
-- [Concepts](./CONCEPTS.md) — what a Zanix App is, and how it relates to the rest of the Zanix
+- [Concepts](./concepts.md) — what a Zanix App is, and how it relates to the rest of the Zanix
   ecosystem.
-- [Publishing a Zanix App](./PUBLISHING.md) — distributing your own `defineZanixApp()` as a package.
+- [Publishing a Zanix App](./publishing.md) — distributing your own `defineZanixApp()` as a package.
