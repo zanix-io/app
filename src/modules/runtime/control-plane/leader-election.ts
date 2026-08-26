@@ -1,4 +1,4 @@
-import type { ZanixCacheConnectorGeneric } from '@zanix/server'
+import type { ZanixRedisConnectorLike } from '@zanix/datamaster/cache/types'
 
 const KEY_PREFIX = 'zanix:control-plane:lease'
 const DEFAULT_LEASE_TTL_SECONDS = 30
@@ -134,7 +134,7 @@ async function settleAll<T>(
  * own failure.
  */
 export class LeaderElection {
-  #connectors: ZanixCacheConnectorGeneric<'redis'>[]
+  #connectors: ZanixRedisConnectorLike[]
 
   /** Wraps one or more already-constructed Redis cache connectors — this class never constructs
    * its own. A single connector (default single-Redis usage) or an array (Redlock — see this
@@ -143,9 +143,7 @@ export class LeaderElection {
    * for Redlock (never several connectors pointed at the same physical Redis — that buys no real
    * fault tolerance, just repeats the same single point of failure under a different name). */
   constructor(
-    connector: ZanixCacheConnectorGeneric<'redis'> | ZanixCacheConnectorGeneric<
-      'redis'
-    >[],
+    connector: ZanixRedisConnectorLike | ZanixRedisConnectorLike[],
   ) {
     this.#connectors = Array.isArray(connector) ? connector : [connector]
   }
@@ -213,7 +211,7 @@ export class LeaderElection {
     }
 
     const acquireStarted = Date.now()
-    const acquiredOn: ZanixCacheConnectorGeneric<'redis'>[] = []
+    const acquiredOn: ZanixRedisConnectorLike[] = []
     const acquireResults = await settleAll(
       this.#connectors.map(async (connector) => {
         const client = await connector.getClient()

@@ -1,5 +1,5 @@
-import { assertEquals, assertThrows } from '@std/assert'
-import { registerJob } from '@zanix/asyncmq'
+import { assertEquals, assertRejects } from '@std/assert'
+import { registerJob } from '@zanix/asyncmq/jobs'
 import { getNamespacedJobOrigin, registerNamespacedJobs } from 'modules/runtime/register-jobs.ts'
 import { normalize } from 'modules/manifest/normalize.ts'
 
@@ -14,11 +14,11 @@ function appWithJob(appName: string, jobName: string) {
 
 Deno.test(
   'registerNamespacedJobs: two apps declaring a job of the SAME short name do not collide',
-  () => {
+  async () => {
     // Neither call throws — that IS the assertion (a same-name collision across apps would
     // throw, since @zanix/asyncmq's own registerJob rejects a duplicate name).
-    registerNamespacedJobs(appWithJob('billing-jobs-test', 'syncProducts'))
-    registerNamespacedJobs(appWithJob('inventory-jobs-test', 'syncProducts'))
+    await registerNamespacedJobs(appWithJob('billing-jobs-test', 'syncProducts'))
+    await registerNamespacedJobs(appWithJob('inventory-jobs-test', 'syncProducts'))
 
     assertEquals(getNamespacedJobOrigin('billing-jobs-test:syncProducts'), {
       appName: 'billing-jobs-test',
@@ -33,17 +33,17 @@ Deno.test(
 
 Deno.test(
   'registerNamespacedJobs: the SAME app registering the SAME job name twice still collides (namespacing does not suppress real duplicates)',
-  () => {
+  async () => {
     const def = appWithJob('reviews-duplicate-test', 'sendDigest')
-    registerNamespacedJobs(def)
+    await registerNamespacedJobs(def)
 
-    assertThrows(() => registerNamespacedJobs(def))
+    await assertRejects(() => registerNamespacedJobs(def))
   },
 )
 
 Deno.test(
   'registerNamespacedJobs: a scheduled job (has `schedule`) registers under its namespaced name too',
-  () => {
+  async () => {
     const def = normalize({
       name: 'scheduler-test-app',
       jobs: {
@@ -55,7 +55,7 @@ Deno.test(
       },
     })
 
-    registerNamespacedJobs(def) // must not throw
+    await registerNamespacedJobs(def) // must not throw
 
     assertEquals(getNamespacedJobOrigin('scheduler-test-app:nightlyReport'), {
       appName: 'scheduler-test-app',

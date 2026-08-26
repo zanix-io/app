@@ -29,6 +29,12 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Check formatting
+        run: deno fmt --check
+
+      - name: Lint
+        run: deno lint
+
       # Temporarily disabled: @zanix/cli check-cycles has not been published yet.
       # - name: Check for circular-import hazards
       #   run: deno run -A jsr:@zanix/cli check-cycles

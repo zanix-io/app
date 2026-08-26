@@ -1,4 +1,8 @@
-import type { Job } from '@zanix/asyncmq'
+// `typings/manifest.ts` is the ONE place in this package that imports `@zanix/asyncmq/jobs`'s
+// `Job` type directly (see that module's own doc, and `deno.jsonc`'s own `imports`/`scopes` doc
+// comment, for the specifier this resolves through) — re-used here via its own
+// `export type { Job }` rather than a second import of the same type.
+import type { Job } from 'typings/manifest.ts'
 import type { MessageQueue } from '@zanix/server'
 import { resolveControlPlaneProvider } from './control-plane/mod.ts'
 

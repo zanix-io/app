@@ -1,6 +1,6 @@
 {
   "name": "@zanix/app",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "zanix": {
     "project": "library"
   },
@@ -34,7 +34,7 @@
       ".dist"
     ],
     "plugins": [
-      "jsr:@zanix/utils@^3.0.0/linter/deno-zanix-plugin"
+      "jsr:@zanix/utils@^4.0.0/linter/deno-zanix-plugin"
     ],
     "report": "pretty"
   },
@@ -53,20 +53,26 @@
     "@std/assert": "jsr:@std/assert@0.224",
     "@std/testing": "jsr:@std/testing@1.0.9",
     "@std/semver": "jsr:@std/semver@^1.0.8",
-    "@zanix/server": "jsr:@zanix/server@^3.0.0",
-    "@zanix/asyncmq": "jsr:@zanix/asyncmq@^0.7.0",
-    "@zanix/datamaster": "jsr:@zanix/datamaster@^1.0.0",
-    "@zanix/datamaster/core": "jsr:@zanix/datamaster@^1.0.0/core",
-    "@zanix/auth": "jsr:@zanix/auth@^0.8.0",
-    "@zanix/errors": "jsr:@zanix/utils@^3.0.0/errors",
-    "@zanix/helpers": "jsr:@zanix/utils@^3.0.0/helpers",
-    "@zanix/logger": "jsr:@zanix/utils@^3.0.0/logger",
-    "@zanix/validator": "jsr:@zanix/utils@^3.0.0/validator",
-    "@zanix/workers": "jsr:@zanix/utils@^3.0.0/workers",
+    "@zanix/server": "jsr:@zanix/server@^4.0.0",
+    "@zanix/errors": "jsr:@zanix/utils@^4.0.0/errors",
+    "@zanix/types": "jsr:@zanix/utils@^4.0.0/types",
+    "@zanix/helpers": "jsr:@zanix/utils@^4.0.0/helpers",
+    "@zanix/logger": "jsr:@zanix/utils@^4.0.0/logger",
+    "@zanix/validator": "jsr:@zanix/utils@^4.0.0/validator",
+    "@zanix/workers": "jsr:@zanix/utils@^4.0.0/workers",
+    "@zanix/datamaster/cache/types": "jsr:@zanix/datamaster@^1.7.0/cache/types",
+    "@zanix/asyncmq/jobs": "jsr:@zanix/asyncmq@^0.8.0/jobs",
     "shared/": "./src/shared/",
     "typings/": "./src/typings/",
     "utils/": "./src/utils/",
     "modules/": "./src/modules/"
+  },
+  "scopes": {
+    "./src/@tests/": {
+      "@zanix/datamaster": "jsr:@zanix/datamaster@^1.7.0",
+      "@zanix/datamaster/core": "jsr:@zanix/datamaster@^1.7.0/core",
+      "@zanix/auth": "jsr:@zanix/auth@^0.8.1"
+    }
   },
   "exports": {
     ".": "./mod.ts",

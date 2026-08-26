@@ -5,7 +5,253 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-08-26
+
+### Fixed
+
+- `@zanix/app/runtime` (`activateApps`/`registerApp`) statically, unconditionally imported
+  `@zanix/asyncmq`, `@zanix/datamaster`, and `@zanix/auth` — even for a Zanix App manifest that
+  declares no `jobs`/`resources`/remote-callable `operations` at all (e.g. a bare `@zanix/space` app
+  using only `bootstrapRemoteApp`). This dragged `mongoose`/`mongodb`/`bson`, `redis`/`@redis/*`,
+  and `amqplib` (and, transitively, `@zanix/datamaster`'s own S3 `@aws-sdk/client-s3` tree) into the
+  module graph of ANY consumer that merely imported `@zanix/app/runtime` — confirmed via
+  `deno
+  info`'s own module graph and a real `Initialize mongoose/redis/amqplib/@aws-sdk/*`
+  package-materialization trace in a clean checkout. Beyond cold-cache download cost, a bundler
+  resolving this entry point (e.g. `zanix space build`'s Vite/Rolldown pipeline, and — separately,
+  confirmed by a real end-to-end `zanix space build` run against a locally-linked fixed checkout —
+  Deno's own `nodeModulesDir: "auto"` npm-install-style resolution) walked the same declared
+  dependency, so this made every `zanix space build` for a project with zero jobs/resources/remote
+  operations resolve a dependency tree dozens of times larger than necessary. Two layers, both
+  needed — confirmed empirically, not assumed:
+  - **Call sites**: `register-jobs.ts` (`@zanix/asyncmq`), `resource-types.ts`
+    (`@zanix/datamaster`'s `mongo`/`redis` resource types),
+    `http-remote-adapter.ts`/`mtls-dispatch-server.ts`/ `remote-dispatch-route.ts`/`mcp-route.ts`
+    (`@zanix/auth`): each now reaches its package through a deliberately non-literal,
+    fully-qualified `jsr:...` `import()` specifier (a shared constant in the new
+    `lazy-specifiers.ts`, never a bare alias), evaluated only when a manifest genuinely declares the
+    corresponding capability (checked BEFORE the import, not after). Every whole-module
+    `typeof import('pkg')` type alias this fix originally used was replaced with a narrow,
+    hand-declared local interface for exactly the few bindings each file actually destructures —
+    confirmed real, not theoretical: a `typeof import(...)` alias, though erased from emitted JS,
+    still forced a type-checker (and this specific Vite/Deno-loader pipeline) to resolve the target
+    package's own FULL export surface, materializing its dependencies anyway. No new opt-in import
+    is required for existing `jobs`/`resources`/`operations` usage to keep working — this was
+    deliberately NOT solved with a narrower opt-in subpath (e.g. widening `@zanix/app/core`), since
+    that would have required every consumer already using `operations` to add a new import merely to
+    keep working, breaking a real, functional-test-verified behavior
+    (`service-token-exchange-validation.test.ts`) that never needed one before.
+  - **`deno.jsonc`'s own `imports` map**: `@zanix/asyncmq`/`@zanix/datamaster`/`@zanix/auth` are now
+    absent from it entirely (moved to a `scopes` entry for `./src/@tests/` only, where this
+    package's own test suite still constructs real connectors directly) — confirmed via a controlled
+    `zanix space build` experiment that a bare alias declared here is, on its own, enough to trigger
+    `nodeModulesDir: "auto"`-style materialization regardless of whether any reachable code
+    references it, or through what specifier form.
+  - `getResourceFactory` (`resource-types.ts`, re-exported from `@zanix/app/runtime`) stays `sync`,
+    returning `ResourceFactory | undefined` exactly as before — resolving WHICH factory applies to a
+    `type` never itself needs an `await`; only actually INVOKING the returned factory does
+    (unchanged call-site shape in `resolve-resources.ts`). An earlier draft of this fix made this
+    function `async` (a real, then-documented semver-minor break) while its `'mongo'`/`'redis'`
+    resolution used a hand-rolled `await import(...)`; adopting `@zanix/utils`'s own `lazyClass`
+    (see below) let this revert to the original sync signature — `lazyClass` returns an async
+    FACTORY, so only the factory's own invocation is async, not choosing it.
+  - **`register-jobs.ts`/`resource-types.ts`/`http-remote-adapter.ts`/`mtls-dispatch-server.ts` now
+    use `@zanix/utils`'s own `lazyFunction`/`lazyClass`/`lazyValue` helpers** (`@zanix/helpers`,
+    superseding the hand-rolled `await import(specifier) as NarrowInterface` boilerplate the first
+    draft of this fix used at each call site) — `resource-types.ts`'s `'mongo'`/`'redis'` factories
+    via `lazyClass`, `http-remote-adapter.ts`'s `createServiceAuthClient` via `lazyFunction`,
+    `mtls-dispatch-server.ts`'s
+    `getSecretByToken`/`verifyJWT`/`exchangeServiceCredential`/`DEFAULT_AUTH_ISSUER` via
+    `lazyFunction`/`lazyValue`. Two call sites deliberately did NOT adopt the generic helper, each
+    documented in place with why: `register-jobs.ts` keeps its own narrow `AsyncmqExports` interface
+    (consistent with `typings/manifest.ts`'s own temporary-local-type stopgap above, not a separate
+    decision); `mcp-route.ts`/`remote-dispatch-route.ts` keep their own `AuthExports` + raw
+    `await import(...)` because `AuthTokenValidation` is applied as a real class DECORATOR, which
+    needs the decorator function SYNCHRONOUSLY at class-declaration time — `lazyFunction`'s wrapper
+    always returns a `Promise` (it awaits internally on every call), which a decorator position can
+    never accept.
+  - **`deno.jsonc`'s `@zanix/helpers` entry is a TEMPORARY local path override**
+    (`../utils/src/modules/helpers/mod.ts`, plus a paired `scopes` entry for `../utils/src/` and a
+    `compilerOptions.types` addition — both documented in place, both removed together), matching
+    `cli/deno.jsonc`'s own established pattern for a not-yet-published dependency: real JSR
+    currently only has `@zanix/utils` v3.x, which has no `lazyFunction`/`lazyClass`/`lazyValue`
+    exports at all. Revert to a real `jsr:@zanix/utils@^4.0.0/helpers` specifier (dropping the local
+    override, the paired `scopes` entry, and the `compilerOptions.types` addition together) once
+    `@zanix/utils` v4 is actually published. Validated with the link active: `deno fmt`/
+    `lint`/`check` clean, full suite green (280/280).
+  - `runtime.ts`'s own module doc, which used to document `@zanix/asyncmq`/`@zanix/datamaster`/
+    `@zanix/auth` as unconditional dependencies "as more lands", is corrected to describe the
+    actual, now-conditional shape.
+  - **A residual gap this same fix originally left open — now closed, after a second, deeper
+    finding, with a TEMPORARY (not final-design) fix**: `typings/manifest.ts`'s `JobDefinitionEntry`
+    (`AppDefinition.jobs`' own shape) used to `import type` `@zanix/asyncmq`'s real
+    `JobProcess`/`CronJobDefinitionBase`/`Job` types directly (a fully-qualified specifier, not a
+    bare alias), on the assumption that a pure `import type` — erased entirely at build time — costs
+    nothing beyond type-checking. Confirmed real via an isolated `deno check` repro that it does
+    NOT: for a JSR package whose own graph has real npm dependencies (`@zanix/asyncmq` needs
+    `@zanix/datamaster`, hence `mongoose`/`mongodb`/`bson`/`redis`/`@redis/*`),
+    `nodeModulesDir:
+    "auto"` materializes that whole tree just from resolving the TYPE — the
+    same npm-install mechanism already documented above for VALUE-level bare aliases, not limited to
+    them. `@zanix/asyncmq` currently has no narrow subpath exposing `Job`/`CronJobDefinitionBase`/
+    `JobProcess`/`registerJob`/`registerCronJob` without also pulling in its RabbitMQ connector/
+    providers/subscribers (its only entry points are `.`/`/worker`/`/core`/`/dlq`), so there is
+    currently no safe target to `import type` from at all. Stopgap fix: hand-rolled
+    `Job`/`ProcessingQueues`/`JobProcess`/`CronJobDefinitionBase` as LOCAL, structural types in
+    `typings/manifest.ts` itself — no `@zanix/asyncmq` (or `@zanix/server`, equally unsafe for this
+    module, which is shared by `@zanix/app`'s dependency-free `.` entry point) reference anywhere,
+    type or value. Confirmed via an isolated repro of the exact current file: materializes NOTHING —
+    no `node_modules` directory even created. `job-leader-election.ts` re-uses this same local `Job`
+    type via `typings/manifest.ts` (never its own `@zanix/asyncmq` import), preserving the
+    established `modules/` → `typings/` dependency direction. `lazy-specifiers-sync.test.ts`
+    (rewritten accordingly) guards the current invariant — that neither file reintroduces a real
+    reference to either package. **Explicitly NOT accepted as the final design** — a real,
+    unaccepted-long-term drift risk exists as long as this local mirror stands in for the real type;
+    revert to a real `import type` once `@zanix/asyncmq` ships a narrow subpath for its
+    job-registration surface (tracked in that package's own repo, not this one).
+
+- **The stopgap above is now resolved for real**: `@zanix/asyncmq@0.8.0` shipped the narrow `./jobs`
+  subpath (`registerJob`/`registerCronJob` + `Job`/`BaseJob`/`JobDefinition`/`JobProcess`/
+  `CronJobDefinition`/`CronJobDefinitionBase`/`ProcessingQueues` — no RabbitMQ connector, no
+  `@zanix/database`). `typings/manifest.ts` now `import type`s the real types from
+  `@zanix/asyncmq/jobs` and re-exports them verbatim — the hand-rolled local mirror block and
+  `lazy-specifiers-sync.test.ts` (the regression guard for that stopgap) are both deleted; there is
+  no local copy of `@zanix/asyncmq`'s job/cron contract left anywhere in this package.
+  `job-leader-election.ts` is unaffected — it still gets `Job` through `typings/manifest.ts`, now
+  the real type instead of the local mirror. `register-jobs.ts`'s own `ASYNCMQ_SPECIFIER` (the
+  VALUE-level, lazy, non-literal `import()` target) now also points at `./jobs` instead of the bare
+  root, since the root no longer re-exports `registerJob`/`registerCronJob` at all (moved, not
+  duplicated) — its narrow `AsyncmqExports` interface stays as-is regardless, since what requires it
+  (a non-literal dynamic `import()` specifier, which TypeScript can't infer a shape from) is
+  independent of whether the target subpath itself is narrow. Confirmed via an isolated repro that
+  `@zanix/asyncmq/jobs` stays free of `amqplib`/`mongoose`/`redis`/`@aws-sdk/*` either way — this
+  package's `.` entry point does now transitively depend on `@zanix/server` (`./jobs`'s own
+  `Job`/`JobProcess` need its `MessageQueue`/`HandlerContext`/provider-getter types), which, as of
+  `@zanix/server`'s currently published version, carries its own separate, already-tracked leak
+  (`graphql`, a `redis` type reference) unrelated to this change — see `typings/manifest.ts`'s own
+  doc. **TEMP**: `deno.jsonc`'s `@zanix/asyncmq/jobs` entry is a local path override
+  (`../asyncmq/src/modules/jobs/mod.ts`, plus a paired `scopes` entry for `../asyncmq/src/`) — real
+  JSR doesn't have `@zanix/asyncmq` 0.8.0 published yet. Revert to a real
+  `jsr:@zanix/asyncmq@^0.8.0/jobs` specifier (dropping the override and its paired scope) once it
+  publishes. `deno fmt`/`lint`/`check` clean, full suite green (277/277).
+
+- **Exhaustive per-subpath audit of `.`/`./runtime`/`./core`, confirming the fixes above**: an
+  isolated repro per subpath (a consumer importing only that one, `node_modules/.deno` inspected
+  directly rather than `deno info`'s own graph, which omits type-only edges) confirms none of the
+  three reaches `amqplib`/`mongoose`/`mongodb`/`bson`/`@aws-sdk/*` — only `graphql`/`redis`/
+  `@redis/*`, all from `@zanix/server`'s own already-tracked, unrelated leak (present against the
+  real, currently published `@zanix/server`; all three subpaths need its root for real, either
+  directly or through `@zanix/asyncmq/jobs`'s own types). **Measured, not assumed, whether this
+  clears once `@zanix/server` publishes**: a second repro pointed `@zanix/server` at that package's
+  own local, unpublished checkout — the same TEMP relative-link shape already used for
+  `@zanix/helpers`/`@zanix/asyncmq/jobs` above, applied at BOTH the levels that resolve
+  `@zanix/server` (this package's own top-level `imports`, and `@zanix/asyncmq`'s, via a matching
+  `../asyncmq/src/` `scopes` entry — omitting the second one leaves `@zanix/asyncmq`'s own
+  `jsr:@zanix/server@^3.0.0` pin resolving the real published version regardless of this package's
+  own override, since Deno treats a linked local package's own directory as governed by its own
+  import map first). With both in place, and `deno.lock` deleted before each repro (the same
+  discipline as above — a stale lockfile's own `npm` section otherwise gets synced into
+  `node_modules` regardless of current reachability): all three subpaths' `node_modules/.deno` come
+  back completely empty — zero npm packages, `graphql`/`redis` included. `deno check` against that
+  local checkout does report 21 real `TS18046`/`TS7006` errors in
+  `modules/runtime/control-plane/registry.ts` (a real, separate, already-anticipated
+  breaking-type-change fallout: that file's own code assumes `ZanixCacheConnectorGeneric['redis']`'s
+  `getClient()` still returns a Redis-shaped client, `@zanix/server`'s own fix having changed it to
+  `Promise<unknown>` — a follow-up for whenever `@zanix/server` actually publishes it, not a
+  materialization issue) — module RESOLUTION itself completes cleanly either way, before type errors
+  are ever reported, so this doesn't affect the `node_modules` measurement. Confirmed via the
+  resolved value graph too (`deno info`: 466 unique dependencies, zero `npm:/` entries) that
+  `@zanix/server`'s own `getMainHandler` no longer statically imports its GraphQL handler module —
+  it goes through a registry indirection
+  (`registerGraphqlHandlerFactory`/`getGraphqlHandlerFactory`) that keeps the real `graphql` npm
+  package out of the reachable graph for a non-GraphQL consumer. **Both TEMP links were removed
+  again immediately after this measurement** — this was a one-time verification, not a change to
+  keep; `@zanix/server`'s own `imports` entry here stays the real `jsr:@zanix/server@^3.0.0` until
+  that package actually publishes its fix. One real, if currently inert, gap found and closed along
+  the way: `mod.ts`'s own six re-exported runtime types (`ActivatedApps`/`AnnouncedRemoteInstance`/
+  `HttpRemoteDispatcher`/`RemoteCallerFactory`/`ResourceRegistry`/`ZanixAppServerOptions`) were
+  `import type`'d from the `./runtime` barrel (`modules/runtime/mod.ts`) rather than from each
+  type's own defining file — resolving them therefore forced resolution of every OTHER file the
+  barrel re-exports too (`mcp-route.ts`, `mtls-dispatch-server.ts`, `gateway.ts`, ...), none of
+  which happens to add a new npm dependency today, but any one of them could tomorrow without `.`'s
+  own doc comment or exports changing at all. Each type now comes from its own defining file
+  instead, so `.`'s real type-reachability matches what its six exports actually need. Confirmed via
+  a repro before and after: identical `node_modules/.deno` contents either way (today), full
+  `deno check`/`lint`/`fmt` clean, full suite green (277/277).
+
+- **The 21 `TS18046`/`TS7006` errors anticipated above are now fixed, ahead of `@zanix/server`
+  actually publishing `4.0.0`**: `modules/runtime/control-plane/registry.ts`/`leader-election.ts`/
+  `config-plane.ts` assumed `ZanixCacheConnectorGeneric<'redis'>`'s `getClient()` still returned a
+  Redis-shaped client — true only by accident, on the currently pinned, published `^3.0.0` line (its
+  own now-tracked `npm:redis@...` literal leak), and no longer true once `4.0.0` narrows that
+  default to `Promise<unknown>` for real. The Control Plane is unconditionally Redis-backed by
+  design (`SADD`, `SET ... NX EX`, `EVAL`, `PUBLISH`/`SUBSCRIBE`, ...) — raw commands
+  `@zanix/server`'s own generic cache API never covers — so all three files now type their connector
+  as `ControlPlaneRedisConnector` (new, `modules/runtime/control-plane/types.ts`):
+  `@zanix/datamaster`'s real `ZanixRedisConnector`, whose own `getClient` override already supplies
+  the concrete `RedisClientType` default regardless of `@zanix/server`'s own loose fallback.
+  `ZanixControlPlaneProvider` (`provider.ts`) now resolves this connector via
+  `this.connectors.get('cache:redis')`, typed through a new `ControlPlaneCoreModules` interface —
+  the same `CoreModules`/`ZanixConnectorsGetter` mechanism `@zanix/server` itself documents for a
+  string key outside its 6 pre-typed slots — instead of the untyped `this.cache.redis`. `deno.jsonc`
+  gains one new, narrow, PERMANENT alias, `@zanix/datamaster/cache`
+  (`jsr:@zanix/datamaster@^1.0.0/cache`) — confirmed `mongoose`/`@aws-sdk/*`-free, same audit method
+  as the entries above. Unlike every other `@zanix/datamaster` reference in this package, this one
+  is reached unconditionally (the Control Plane has no lazy/conditional gate the way the
+  `mongo`/`redis` resource types do), so `redis` itself becomes a real, deliberate dependency of
+  every `@zanix/app/runtime` consumer from here on — an accepted cost of this specific, always-Redis
+  feature, not a leak. **A second, previously undocumented instance of the same "a linked local
+  package's own directory resolves `@zanix/server` through its own import map first" gotcha already
+  known for `@zanix/asyncmq`** turned up verifying this fix: `@zanix/datamaster` is fetched for real
+  from JSR for this new alias (no local override needed for the PERMANENT fix), so its own
+  internally-resolved `@zanix/server` reference is fixed at ITS publish time, independent of this
+  package's own `@zanix/server` pin — verifying the fix against `@zanix/server`'s local, unpublished
+  checkout therefore ALSO needed a matching TEMP local override for `@zanix/datamaster/cache` itself
+  (pointing at that package's own local checkout, which already carries the identical TEMP
+  `@zanix/server` link), removed again immediately after the measurement, same as every other TEMP
+  link in this file. The already-tracked `@zanix/asyncmq`-side instance of this gotcha does NOT
+  apply to these three files specifically — none of them reach `@zanix/server` through
+  `@zanix/asyncmq`'s own local tree; each imports it directly. Validated with both TEMP links
+  active: `deno check` clean against the local `4.0.0` checkout, zero `TS18046`/`TS7006` left. Both
+  reverted immediately after; the real `@zanix/server` pin here stays `jsr:@zanix/server@^3.0.0`
+  until that version actually publishes. `deno fmt`/`lint`/`check` clean, full suite green (277/277)
+  in the normal (non-linked) state too.
+
+- **A real module-duplication risk in the `@zanix/helpers` TEMP override above, confirmed via a live
+  repro, not assumed**: the override pointed at `@zanix/utils`'s own unpublished
+  `modules/helpers/mod.ts` barrel, which re-exports `utils/cron.ts` and
+  `modules/helpers/masking/hard.ts` alongside `lazyFunction`/`lazyClass`/`lazyValue` — the only
+  three exports this package actually needs from it. Both of those unrelated files import `logger`
+  via a bare `modules/logger/mod.ts` specifier, resolved (through the paired `../utils/src/` scope)
+  against that same unpublished checkout — a second, separate `Logger`/`Proxy` module instance from
+  the `jsr:@zanix/utils@^3.0.0/logger` one every other file in this package resolves `@zanix/logger`
+  to. A live repro confirmed the real failure mode:
+  `Object.getPrototypeOf(realLogger) ===
+  Object.getPrototypeOf(checkoutLogger)` is `false`, and a
+  spy installed on the real logger's prototype never observes a call made through the checkout
+  instance — exactly the "10 tests failing silently" pattern already confirmed in
+  `@zanix/datamaster` for the same override shape. Fixed by narrowing `deno.jsonc`'s
+  `@zanix/helpers` entry to `../utils/src/utils/lazy-import.ts` directly instead of the whole
+  `mod.ts` barrel — that file has no imports of its own, so the duplication risk is gone entirely,
+  with no `scopes` entry needed for it any more. This package's own test suite separately needs
+  `generateRSAKeys`/`getTemporaryFolder` — real, already-published members of
+  `@zanix/utils@^3.0.0`'s real `/helpers` subpath — so `./src/@tests/` gained its own
+  `@zanix/helpers` scope entry pinned to the real `jsr:@zanix/utils@^3.0.0/helpers`, keeping the
+  unpublished checkout out of the test tree entirely too. The now-unused `../utils/src/` `scopes`
+  entry (previously needed only by the whole-barrel override) is removed. `compilerOptions.types`'s
+  own `../utils/src/typings/index.d.ts` raw-path entry carried the identical risk on the
+  type-checking side (its `Logger` type reference resolved against the same unpublished checkout) —
+  replaced with a new, small, local ambient file, `src/typings/zanix-global.d.ts`, declaring the
+  same `Znx`/`Window` global through `ZanixGlobal` (`@zanix/types`, a new alias for the real
+  published `jsr:@zanix/utils@^3.0.0/types`) instead of a raw path into any checkout — matching
+  `@zanix/datamaster`'s own real, already-fixed precedent for this exact shape. **Once
+  `@zanix/utils` v4 publishes** (dropping the `@zanix/helpers` override back to a real
+  `jsr:@zanix/utils@^4.0.0/helpers` specifier, per the TEMP note above), the `./src/@tests/` scope
+  entry for it goes with it; `src/typings/zanix-global.d.ts` and the `@zanix/types` alias stay
+  regardless — they never depended on the unpublished checkout and are this package's permanent,
+  checkout-independent way of declaring the `Znx` global. `deno
+  fmt`/`lint`/`check` clean, full
+  suite green (277/277).
 
 ## [0.2.0] - 2026-08-23
 

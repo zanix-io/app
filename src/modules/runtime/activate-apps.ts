@@ -13,51 +13,22 @@ import { ResourceRegistry } from './resource-registry.ts'
 import { resolveResources } from './resolve-resources.ts'
 import { runOnStart, runOnStop } from './lifecycle.ts'
 import { setBehaviorOverride } from './behavior-registry.ts'
-import {
-  createRemoteCaller,
-  type HttpRemoteDispatcher,
-  type RemoteCallerFactory,
-} from './remote-caller.ts'
+import { createRemoteCaller, type HttpRemoteDispatcher } from './remote-caller.ts'
 import { HttpRemoteAdapter, resolveDefaultDispatcher } from './http-remote-adapter.ts'
 import { resolveControlPlaneProvider } from './control-plane/mod.ts'
-import {
-  type AnnouncedRemoteInstance,
-  announceRemoteInstance,
-  type RemoteInstanceOptions,
-} from './remote-lifecycle.ts'
+import { announceRemoteInstance, type RemoteInstanceOptions } from './remote-lifecycle.ts'
+import type { ActivatedApps, AnnouncedRemoteInstance } from './activation-types.ts'
 
-/**
- * Everything {@link activateApps} produced — enough for {@link deactivateApps} to shut the same
- * set of apps back down without the caller re-deriving or re-passing anything, and enough for
- * `installApp`/`uninstallApp` (hot install/uninstall) to extend or shrink this same set later,
- * against a still-running process, without re-deriving `rootResources`/`bindings` either.
- */
-export interface ActivatedApps {
-  /** The normalized apps that were activated, in the same order they were declared. */
-  readonly apps: NormalizedAppDefinition[]
-  /** The shared `Map<`${appName}:${slot}`, instance>` every app's resources resolved into —
-   * still open; only {@link deactivateApps} closes it. */
-  readonly resources: Map<string, unknown>
-  /** The registry that owns `resources`' construction/close lifecycle. */
-  readonly registry: ResourceRegistry
-  /** The `ctx.remote` factory every activated app's context was built with — {@link
-   * deactivateApps} reuses it so `onStop` gets the exact same `ctx.remote` `onStart` did. */
-  readonly remoteCaller: RemoteCallerFactory
-  /** Every instance announced to the Control Plane via `remoteInstances` — {@link deactivateApps}
-   * stops (deregisters) each of these BEFORE running `onStop`. Empty if `remoteInstances` was
-   * never given. */
-  readonly announced: AnnouncedRemoteInstance[]
-  /** The exact `rootResources` this batch was composed against — `installApp` merges a new app's
-   * own additions into this same object rather than starting from an empty one, so a hot-installed
-   * app can still resolve to a root resource an EARLIER app already shares. */
-  readonly rootResources: RootResources
-  /** The exact `bindings` (host `uses`) this batch was composed against — same reuse reasoning as
-   * `rootResources`. */
-  readonly bindings: ResourceBinding[]
-  /** The dispatcher every activated app's `mode: 'remote'` resources resolve through — `installApp`
-   * passes this straight to `resolveResources` for the new app's own delta, unchanged. */
-  readonly dispatcher: HttpRemoteDispatcher | undefined
-}
+// `ActivatedApps` lives in `activation-types.ts`, not here — see that module's own doc for why:
+// this file's own real value-level imports (`control-plane/mod.ts`, `http-remote-adapter.ts`)
+// would otherwise be dragged into `.`'s (`mod.ts`) reachable graph by a bare `import type
+// {ActivatedApps} from './activate-apps.ts'` — a type-only import still makes Deno resolve the
+// imported module's full specifier graph (only the type itself is erased from the emitted
+// output), so importing a type from a module with heavy real imports still materializes those
+// imports' packages for anyone doing nothing more than importing the type. Re-exported here so
+// every existing import of `ActivatedApps` FROM this file (this module's own return type,
+// `modules/runtime/mod.ts`'s barrel) keeps working unchanged.
+export type { ActivatedApps }
 
 /**
  * Wires the reference sequence for composing a set of Zanix Apps into the running process —

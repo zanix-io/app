@@ -1,10 +1,21 @@
 /**
  * `@zanix/app/runtime` — the entry point that wires a Zanix App manifest into a real, running
- * process (`AppContainer`, `ResourceRegistry`). This DOES depend on `@zanix/server` (and, as more
- * lands, on `@zanix/asyncmq`/`@zanix/datamaster`/`@zanix/auth`) — it is the one half of
- * `@zanix/app` that can't avoid it: registering a real HTTP route or a real DI resolution is
- * `@zanix/server`'s own job (`ProgramModule`/`RouteContainer`/`TargetContainer`), not something
+ * process (`AppContainer`, `ResourceRegistry`). This DOES depend on `@zanix/server` — the one
+ * half of `@zanix/app` that can't avoid it: registering a real HTTP route or a real DI resolution
+ * is `@zanix/server`'s own job (`ProgramModule`/`RouteContainer`/`TargetContainer`), not something
  * this package reimplements.
+ *
+ * It does NOT unconditionally depend on `@zanix/asyncmq`/`@zanix/datamaster`/`@zanix/auth`,
+ * despite `activateApps()` supporting `jobs`/`resources`/remote-callable `operations` — each of
+ * those three packages is reached through a deliberately non-literal `import()` specifier (see
+ * `register-jobs.ts`/`resource-types.ts`/`http-remote-adapter.ts`'s own docs for the full
+ * reasoning), evaluated ONLY when a manifest genuinely declares the corresponding capability. A
+ * `bootstrapRemoteApp()` caller whose manifest declares none of the three (e.g. a bare
+ * `@zanix/space` app) never resolves any of them — confirmed via `deno info`'s own code-reachable
+ * module graph, not just asserted. This matters beyond cold-cache download time: a bundler
+ * resolving this entry point (e.g. `zanix space build`'s Vite/Rolldown pipeline) walks the same
+ * graph, so a project that never uses jobs/resources/remote operations never pays for
+ * `mongoose`/`mongodb`/`redis`/`amqplib` either.
  *
  * Split from the pure-manifest entry point (`.`, `mod.ts`) deliberately: anything that only needs
  * to author/type-check a manifest (a CLI scaffold, a lint rule, a build-time validator) imports

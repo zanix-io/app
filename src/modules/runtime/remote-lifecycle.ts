@@ -3,6 +3,19 @@ import type { ControlPlaneConfig, ControlPlaneRegistry } from './control-plane/m
 import { setConfigOverride } from './config-overrides.ts'
 import { type MtlsDispatchOptions, startMtlsDispatchServer } from './mtls-dispatch-server.ts'
 import logger from '@zanix/logger'
+import type { AnnouncedRemoteInstance } from './activation-types.ts'
+
+// `AnnouncedRemoteInstance` lives in `activation-types.ts`, not here — see that module's own doc
+// for why: this file's own real (`startMtlsDispatchServer`) and type-only (`ControlPlaneConfig`/
+// `ControlPlaneRegistry`, themselves resolving `@zanix/datamaster/cache`'s real `redis` import)
+// imports would otherwise be dragged into `.`'s (`mod.ts`) reachable graph by a bare `import type
+// {AnnouncedRemoteInstance} from './remote-lifecycle.ts'` — a type-only import still makes Deno
+// resolve the imported module's full specifier graph (only the type itself is erased from the
+// emitted output), so importing a type from a module with heavy real imports still materializes
+// those imports' packages for anyone doing nothing more than importing the type. Re-exported here
+// so every existing import of `AnnouncedRemoteInstance` FROM this file (this module's own return
+// type, `modules/runtime/mod.ts`'s barrel) keeps working unchanged.
+export type { AnnouncedRemoteInstance }
 
 /** Default lease TTL for a registered instance — matches `ControlPlaneRegistry`'s own default. */
 const DEFAULT_LEASE_TTL_SECONDS = 30
@@ -27,21 +40,6 @@ export interface RemoteInstanceOptions {
    * through the app's own regular (non-mTLS) `Deno.serve()` routes. See
    * `MtlsDispatchOptions`/`HttpRemoteAdapterTlsOptions` for what this does and doesn't achieve. */
   mtls?: MtlsDispatchOptions
-}
-
-/** What {@link announceRemoteInstance} returns — everything {@link deactivateApps} needs to
- * cleanly reverse the announcement, symmetric with how it was made. */
-export interface AnnouncedRemoteInstance {
-  /** The app this announcement belongs to. */
-  appName: string
-  /** The identity this instance registered under — either `options.instanceId` or the
-   * randomly-generated one, if none was given. */
-  instanceId: string
-  /** Stops the heartbeat, closes the Config Plane subscription (if any), and deregisters this
-   * instance — best-effort: a deregistration failure is swallowed, never thrown, since the
-   * process is already tearing down regardless (same reasoning `ResourceRegistry.close()` and
-   * `runOnStop` already apply). */
-  stop(): Promise<void>
 }
 
 /**

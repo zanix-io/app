@@ -1,11 +1,12 @@
 import type { RemoteCallOptions } from 'typings/remote.ts'
-import { createServiceAuthClient, type ServiceAuthHeaders } from '@zanix/auth'
 import { InternalError } from '@zanix/errors'
+import { lazyFunction } from '@zanix/helpers'
 import type { ControlPlaneRegistry } from './control-plane/mod.ts'
 import { resolveControlPlaneProvider } from './control-plane/mod.ts'
 import type { HttpRemoteDispatcher } from './remote-caller.ts'
 import { generateTraceparent } from './trace-context.ts'
 import { RoundRobinPicker } from './round-robin.ts'
+import { AUTH_SPECIFIER } from '../lazy/specifiers.ts'
 
 /** Every operation this adapter exposes on a remote target lives under this path segment, followed
  * by the target app's own `name` — e.g. `/__zanix-ops/reviews/createReview` — independent of that
@@ -19,11 +20,30 @@ export const OPERATIONS_PATH_SEGMENT = '__zanix-ops'
 export const SERVICE_TOKEN_PATH_SEGMENT = 'service-token'
 
 /** What `createServiceAuthClient` returns — kept as a named alias so `#authClients`'s `Map` type
- * doesn't have to spell out the full function signature inline. */
+ * doesn't have to spell out the full function signature inline. `Record<string, string>` mirrors
+ * `@zanix/auth`'s own `ServiceAuthHeaders` shape exactly (a plain header-name → value map),
+ * hand-declared rather than imported — even as a type — for the same reason
+ * {@linkcode createServiceAuthClient} below is a synthetic, narrow signature rather than a real
+ * `typeof import('@zanix/auth')`: a whole-module type alias, even though it's erased from the
+ * emitted JS, still forces a type-checker to resolve `@zanix/auth`'s own full export surface to
+ * compute the `typeof` — confirmed real, not theoretical, that this materializes `@zanix/auth`'s
+ * own dependency tree into `node_modules/.deno` (the Vite/Rolldown pipeline's own Deno loader
+ * resolves TYPE edges, not only value ones). */
 type ServiceAuthClient = (
   targetServiceId: string,
   exchangeUrl: string,
-) => Promise<ServiceAuthHeaders>
+) => Promise<Record<string, string>>
+
+/**
+ * Lazily resolves and calls `@zanix/auth`'s own `createServiceAuthClient` — never importing that
+ * package until this is actually invoked (see {@linkcode AUTH_SPECIFIER}'s own doc for why the
+ * specifier is a deliberately non-literal, fully-qualified `jsr:` string). The generic parameter
+ * is a synthetic, narrow signature — never the real one inferred from the package — for the same
+ * reason {@link ServiceAuthClient}'s own doc gives.
+ */
+const createServiceAuthClient = lazyFunction<
+  (options: { serviceId: string; httpClient?: Deno.HttpClient }) => ServiceAuthClient
+>(AUTH_SPECIFIER, 'createServiceAuthClient')
 
 /**
  * Client certificate this adapter presents on every outgoing call — Deno's native TLS support
@@ -106,7 +126,7 @@ export class HttpRemoteAdapter implements HttpRemoteDispatcher {
     return this.#registry
   }
 
-  #authClientFor(callerAppName: string): ServiceAuthClient {
+  async #authClientFor(callerAppName: string): Promise<ServiceAuthClient> {
     let client = this.#authClients.get(callerAppName)
     if (!client) {
       // Passing `this.#httpClient` here (rather than letting `createServiceAuthClient` build its
@@ -115,7 +135,7 @@ export class HttpRemoteAdapter implements HttpRemoteDispatcher {
       // certificate at all, and a genuinely mTLS-enforcing target (`mtls-dispatch-server.ts`,
       // `requestCert`/`rejectUnauthorized` apply to the whole TLS connection, not per-endpoint)
       // would reject it regardless of what the operation call itself presents afterward.
-      client = createServiceAuthClient({
+      client = await createServiceAuthClient({
         serviceId: callerAppName,
         httpClient: this.#httpClient,
       })
@@ -165,14 +185,14 @@ export class HttpRemoteAdapter implements HttpRemoteDispatcher {
     const baseUrl = `${endpoint}/${OPERATIONS_PATH_SEGMENT}/${targetAppName}`
     const exchangeUrl = `${baseUrl}/${SERVICE_TOKEN_PATH_SEGMENT}`
 
-    let authHeaders: ServiceAuthHeaders
+    let authHeaders: Record<string, string>
     let response: Response
     try {
       // Both calls share the same try/catch — a failure exchanging a service token (e.g. a
       // genuinely mTLS-enforcing target rejecting a caller with no/invalid client certificate) is
       // just as much a transport/HTTP failure as the operation call itself failing, and this
       // class's own `@throws` contract below never distinguished between the two.
-      authHeaders = await this.#authClientFor(callerAppName)(
+      authHeaders = await (await this.#authClientFor(callerAppName))(
         targetAppName,
         exchangeUrl,
       )

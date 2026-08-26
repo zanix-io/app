@@ -1,5 +1,5 @@
-import type { ZanixCacheConnectorGeneric } from '@zanix/server'
 import type { RegisteredInstance, RegisterInstanceOptions } from './types.ts'
+import type { ZanixRedisConnectorLike } from '@zanix/datamaster/cache/types'
 import type { RemoteDeploymentTarget } from 'typings/deployment.ts'
 
 const KEY_PREFIX = 'zanix:control-plane:registry'
@@ -27,13 +27,13 @@ function indexKey(appName: string): string {
  * lazily, at read time, never eagerly.
  */
 export class ControlPlaneRegistry {
-  #connector: ZanixCacheConnectorGeneric<'redis'>
+  #connector: ZanixRedisConnectorLike
 
   /** Wraps an already-constructed Redis cache connector — this class never constructs its own;
    * the host decides connection details (URL, retries, TTL offsets) exactly as it would for any
    * other `ZanixCacheConnector`.
    * @param connector The Redis cache connector to read/write the registry through. */
-  constructor(connector: ZanixCacheConnectorGeneric<'redis'>) {
+  constructor(connector: ZanixRedisConnectorLike) {
     this.#connector = connector
   }
 

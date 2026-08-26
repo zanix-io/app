@@ -2,21 +2,36 @@
  * Manifest contracts for a Zanix App — the declarative shape an author writes
  * (`AppDefinition`), its canonical resolved form (`NormalizedAppDefinition`), and the
  * composition-time structures (`ResourceBinding`/`DependencyGraph`/`ResolvedResourceKey`) used to
- * bind a set of apps against a host's resources. Every type here is pure data — none of them
- * import anything from `@zanix/server`, which is what lets `@zanix/app`'s `.` entry point stay
- * dependency-free (see `mod.ts`'s own doc).
+ * bind a set of apps against a host's resources. Every type here is pure data, except for the
+ * job/cron shapes (`Job`/`JobProcess`/`CronJobDefinitionBase`/`ProcessingQueues`), re-exported
+ * verbatim from `@zanix/asyncmq`'s own narrow `./jobs` subpath rather than hand-mirrored locally —
+ * that subpath's own reachable source imports only `@zanix/server` (for its `MessageQueue`/
+ * `HandlerContext`/provider-getter types, the one real dependency this module carries) and
+ * `@zanix/validator`, never `amqplib` (the RabbitMQ connector) nor `@zanix/database`
+ * (`mongoose`/`redis`/`@aws-sdk/*`, the DLQ integration) — see `mod.ts`'s own doc. Deno's
+ * `nodeModulesDir: "auto"` materializes every npm package reachable from a module's import graph
+ * for every consumer, whether or not that consumer ever exercises the capability needing it, so
+ * keeping this module's reachable imports narrow keeps `mongoose`/`@aws-sdk/*` out of a consumer
+ * that never touches the DLQ integration. `@zanix/server`'s own published root additionally
+ * carries a separate `graphql`/`redis` reference of its own, unrelated to `@zanix/asyncmq` or this
+ * module — every subpath of `@zanix/server` a job/cron shape could plausibly need still resolves
+ * to that same root today, so importing any of them still materializes `graphql`/`redis`
+ * regardless of which subpath is actually needed.
  *
- * The one exception is `JobDefinitionEntry` below, which references `@zanix/asyncmq`'s OWN
- * exported types via `import type` — a compile-time-only reference, erased entirely at build
- * time, so it costs nothing at runtime and pulls in none of that package's actual code. It's
- * deliberate: what a job needs to run (`handler`, queue selection, cron format) is
- * `@zanix/asyncmq`'s contract to own, not something this module re-declares in parallel —
- * a hand-rolled structural copy would drift the moment that package's real contract changes.
+ * `job-leader-election.ts` (`modules/runtime/`) re-uses this module's own re-exported `Job` rather
+ * than importing `@zanix/asyncmq/jobs` a second time — deliberately placed here (`typings/`),
+ * never in `modules/lazy/specifiers.ts` (which owns the RUNTIME `import()` specifiers for
+ * `@zanix/asyncmq`/`@zanix/datamaster`/`@zanix/auth`, a genuinely separate, value-level concern) —
+ * every other file under `modules/` already imports types FROM `typings/`, never the reverse; this
+ * keeps that direction intact instead of introducing the only `typings/` → `modules/` edge in the
+ * package.
  *
  * @module
  */
-import type { CronJobDefinitionBase, JobProcess } from '@zanix/asyncmq'
 import type { RemoteAppHandle } from './remote.ts'
+
+export type { CronJobDefinitionBase, Job, JobProcess, ProcessingQueues } from '@zanix/asyncmq/jobs'
+import type { CronJobDefinitionBase, JobProcess } from '@zanix/asyncmq/jobs'
 
 /** Primitive type a `config` entry's value can hold. */
 export type ConfigValueType = 'string' | 'number' | 'boolean'
@@ -170,11 +185,12 @@ export interface BehaviorOverride {
 export type EventsDeclaration = Record<string, Record<string, never>>
 
 /**
- * One `jobs.<name>` entry. `handler` + queue selection (`processingQueue`/`customQueue`) come
- * straight from `@zanix/asyncmq`'s own `JobProcess` — never re-declared here. `schedule`/
- * `isActive` are likewise `@zanix/asyncmq`'s own `CronJobDefinitionBase` fields, just made
- * optional (their presence is what distinguishes a scheduled job — `registerCronJob` — from an
- * on-demand one — `registerJob` — see `NormalizedAppDefinition.jobs`).
+ * One `jobs.<name>` entry. `handler` + queue selection (`processingQueue`/`customQueue`) mirror
+ * `@zanix/asyncmq`'s own `JobProcess` shape (see this module's own doc for why it's a LOCAL
+ * hand-rolled copy, not an import). `schedule`/`isActive` likewise mirror `@zanix/asyncmq`'s own
+ * `CronJobDefinitionBase` fields, just made optional (their presence is what distinguishes a
+ * scheduled job — `registerCronJob` — from an on-demand one — `registerJob` — see
+ * `NormalizedAppDefinition.jobs`).
  */
 export type JobDefinitionEntry =
   & JobProcess
@@ -261,7 +277,8 @@ export interface NormalizedAppDefinition {
     required: boolean
     secret: boolean
   }>
-  /** `handler`/queue selection are `@zanix/asyncmq`'s own (`JobProcess`), never re-declared.
+  /** `handler`/queue selection mirror `@zanix/asyncmq`'s own `JobProcess` shape (see this
+   * module's own doc for why it's a LOCAL hand-rolled copy, not an import).
    * `schedule: null` if the job never declared one (triggered by an event/queue message via
    * `registerJob`, not by cron via `registerCronJob`) — here the real `schedule` type (a
    * 6-field cron format) IS widened to `string | null` so this module has a single, uniform

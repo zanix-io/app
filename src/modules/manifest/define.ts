@@ -4,7 +4,19 @@ import type {
   ResourceBinding,
   RootResources,
 } from 'typings/manifest.ts'
-import type { ActivatedApps, ZanixAppServerOptions } from 'modules/runtime/mod.ts'
+// `ActivatedApps`/`ZanixAppServerOptions` imported from their own narrow defining files, never
+// from the `modules/runtime/mod.ts` barrel — this file is reached by `defineZanixApp` itself
+// (`mod.ts`'s own always-executed export), so a bare `import type {...} from
+// 'modules/runtime/mod.ts'` would resolve that barrel's FULL export table, dragging in
+// `activate-apps.ts`'s real `control-plane`/`http-remote-adapter` imports (and, through them,
+// `@zanix/datamaster/cache`'s real `redis`) purely as a side effect of a type-only import —
+// confirmed via a real `deno info` reachability check, not assumed. `import type` only erases the
+// type itself from the emitted output; it still makes Deno resolve the target module's full
+// specifier graph, so a type-only import from a barrel with heavy real imports still materializes
+// those imports' npm packages. See `activation-types.ts`'s own doc for how the types are split out
+// to avoid this.
+import type { ActivatedApps } from 'modules/runtime/activation-types.ts'
+import type { ZanixAppServerOptions } from 'modules/runtime/bootstrap-app-server.ts'
 import type { ServerID } from '@zanix/server'
 import { normalize } from './normalize.ts'
 
@@ -86,13 +98,23 @@ export function defineZanixApp(def: AppDefinition): ZanixAppDefinition {
     [ZANIX_APP_DEFINITION_BRAND]: true,
     definition,
     serve: async (options = {}) => {
+      // Deliberately non-literal: Deno's own module graph builder (and, transitively, the
+      // Vite/Rolldown scan `zanix space build` runs on top of it) follows a dynamic `import()`
+      // whose argument it can resolve as a string literal at PARSE time, regardless of whether
+      // that branch ever actually executes — a literal `import('modules/runtime/mod.ts')` here
+      // would drag the whole `./runtime` barrel (`@zanix/server`, `control-plane`,
+      // `@zanix/datamaster/cache`'s real `redis`) into `.`'s reachable graph for every consumer
+      // that merely defines a manifest and never calls `serve()` — confirmed via a real `deno
+      // info` reachability check. See `register-jobs.ts`'s own doc for the same non-literal-
+      // specifier technique applied to keep an external npm-backed package's import lazy.
+      const runtimeSpecifier = 'modules/runtime/mod.ts'
       const {
         activateApps,
         bootstrapAppServer,
         deactivateApps,
         webServerManager,
       } = await import(
-        'modules/runtime/mod.ts'
+        runtimeSpecifier
       )
 
       const bindings: ResourceBinding[] = (options.uses ?? []).map((

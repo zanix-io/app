@@ -42,10 +42,10 @@ export async function registerApp(
     if (def.routesPrefix !== null) {
       registerApplicationMount(def.name, def.routesPrefix)
     }
-    registerNamespacedJobs(def)
+    await registerNamespacedJobs(def)
     registerOperations(def, resources, remoteCaller)
     registerBehaviors(def)
-    registerRemoteDispatchRoutes(def)
+    await registerRemoteDispatchRoutes(def)
     await def.setup?.(buildSetupContext(def, resources, remoteCaller))
   })
 }

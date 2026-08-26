@@ -1,14 +1,34 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import https from 'node:https'
 import { AUTH_HEADERS } from '@zanix/server'
-import {
-  DEFAULT_AUTH_ISSUER,
-  exchangeServiceCredential,
-  getSecretByToken,
-  verifyJWT,
-} from '@zanix/auth'
+import { lazyFunction, lazyValue } from '@zanix/helpers'
 import { getLocalOperation, isCallerAllowed } from './operation-registry.ts'
 import { OPERATIONS_PATH_SEGMENT, SERVICE_TOKEN_PATH_SEGMENT } from './http-remote-adapter.ts'
+import { AUTH_SPECIFIER } from '../lazy/specifiers.ts'
+
+/**
+ * Lazily resolves `@zanix/auth`'s own exports this module calls — never importing that package
+ * until this listener is actually started AND a real request reaches one of these (see
+ * `http-remote-adapter.ts`'s own doc for why the specifier is a deliberately non-literal,
+ * fully-qualified `jsr:` string, and for why the type parameters below are synthetic, narrow
+ * signatures rather than a real `typeof import('@zanix/auth')`).
+ */
+const getDefaultAuthIssuer = lazyValue<string>(AUTH_SPECIFIER, 'DEFAULT_AUTH_ISSUER')
+const getSecretByToken = lazyFunction<(token: string, type?: 'user' | 'api') => string>(
+  AUTH_SPECIFIER,
+  'getSecretByToken',
+)
+const verifyJWT = lazyFunction<
+  (
+    token: string,
+    secret: string,
+    options?: { algorithm?: string; iss?: string },
+  ) => { sub?: string }
+>(AUTH_SPECIFIER, 'verifyJWT')
+const exchangeServiceCredential = lazyFunction<(assertion: string) => unknown>(
+  AUTH_SPECIFIER,
+  'exchangeServiceCredential',
+)
 
 /**
  * Dedicated mTLS listener for the `/__zanix-ops/...` dispatch surface ONLY — the one way to
@@ -81,10 +101,13 @@ async function verifyServiceToken(req: IncomingMessage): Promise<string | undefi
     throw new Error(`${AUTH_HEADERS.api} token is missing or invalid.`)
   }
 
-  const secret = getSecretByToken(token, 'api')
+  // `@zanix/auth` is never imported until one of the lazy wrappers above is actually called —
+  // this listener is never started at all unless a host explicitly passes
+  // `RemoteInstanceOptions.mtls`.
+  const secret = await getSecretByToken(token, 'api')
   const payload = await verifyJWT(token, atob(secret), {
     algorithm: 'RS256',
-    iss: DEFAULT_AUTH_ISSUER,
+    iss: await getDefaultAuthIssuer(),
   })
 
   return payload.sub

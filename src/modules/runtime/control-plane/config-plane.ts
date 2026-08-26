@@ -1,5 +1,5 @@
-import type { ZanixCacheConnectorGeneric } from '@zanix/server'
 import type { ConfigSubscription } from './types.ts'
+import type { ZanixRedisConnectorLike } from '@zanix/datamaster/cache/types'
 
 const VALUE_KEY_PREFIX = 'zanix:control-plane:config'
 
@@ -24,12 +24,12 @@ function channelName(appName: string, configKey: string): string {
  * manifest-aware caller exists yet to pass one.
  */
 export class ControlPlaneConfig {
-  #connector: ZanixCacheConnectorGeneric<'redis'>
+  #connector: ZanixRedisConnectorLike
 
   /** Wraps an already-constructed Redis cache connector — this class never constructs its own;
    * the host decides connection details exactly as it would for any other `ZanixCacheConnector`.
    * @param connector The Redis cache connector to read/write/publish config through. */
-  constructor(connector: ZanixCacheConnectorGeneric<'redis'>) {
+  constructor(connector: ZanixRedisConnectorLike) {
     this.#connector = connector
   }
 

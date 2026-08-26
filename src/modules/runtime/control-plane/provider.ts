@@ -2,6 +2,7 @@ import { ProgramModule, ZanixProvider } from '@zanix/server'
 import { ControlPlaneConfig } from './config-plane.ts'
 import { ControlPlaneRegistry } from './registry.ts'
 import { LeaderElection } from './leader-election.ts'
+import type { ControlPlaneCacheModules } from '@zanix/datamaster/cache/types'
 
 /**
  * DI-resolvable Control Plane — the idiomatic way to reach `ControlPlaneRegistry`/
@@ -13,13 +14,8 @@ import { LeaderElection } from './leader-election.ts'
  * Registered as the `'controlPlane'` core-provider slot ONLY when `@zanix/app/core` is imported
  * (see that module's own doc) — importing just `@zanix/app`/`@zanix/app/runtime` never registers
  * this, so a service that never opts in never pays for it.
- *
- * Reuses `this.cache.redis` — the SAME Redis connector any other part of the process already
- * shares via the `'cache'` core-provider slot — rather than opening a second, redundant
- * connection. `ControlPlaneRegistry`/`ControlPlaneConfig`/`LeaderElection` themselves are
- * unchanged: this is a thin DI wrapper around them, memoized per instance, not a reimplementation.
  */
-export class ZanixControlPlaneProvider extends ZanixProvider {
+export class ZanixControlPlaneProvider extends ZanixProvider<{ cache: ControlPlaneCacheModules }> {
   #registry?: ControlPlaneRegistry
   #config?: ControlPlaneConfig
   #leaderElection?: LeaderElection
@@ -32,21 +28,21 @@ export class ZanixControlPlaneProvider extends ZanixProvider {
   /** The Redis-backed remote app Registry — see `ControlPlaneRegistry`'s own doc. */
   public get controlPlaneRegistry(): ControlPlaneRegistry {
     if (!this.#registry) {
-      this.#registry = new ControlPlaneRegistry(this.cache.redis)
+      this.#registry = new ControlPlaneRegistry(this.connectors.get('cache:redis'))
     }
     return this.#registry
   }
 
   /** The Redis-backed, hot-refresh Config Plane — see `ControlPlaneConfig`'s own doc. */
   public get controlPlaneConfig(): ControlPlaneConfig {
-    if (!this.#config) this.#config = new ControlPlaneConfig(this.cache.redis)
+    if (!this.#config) this.#config = new ControlPlaneConfig(this.connectors.get('cache:redis'))
     return this.#config
   }
 
   /** Redis-backed leader election for scheduled jobs — see `LeaderElection`'s own doc. */
   public get leaderElection(): LeaderElection {
     if (!this.#leaderElection) {
-      this.#leaderElection = new LeaderElection(this.cache.redis)
+      this.#leaderElection = new LeaderElection(this.connectors.get('cache:redis'))
     }
     return this.#leaderElection
   }

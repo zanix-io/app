@@ -5,10 +5,33 @@ import {
   Post,
   ProgramModule,
   ZanixController,
+  type ZanixGenericDecorator,
 } from '@zanix/server'
-import { AuthTokenValidation, exchangeServiceCredential } from '@zanix/auth'
 import { handleMcpRequest, type JsonRpcRequest } from './mcp-server.ts'
 import { ServiceTokenExchangeRTO } from './rtos/service-token.rto.ts'
+import { AUTH_SPECIFIER } from '../lazy/specifiers.ts'
+
+/**
+ * Narrow, hand-declared shape for exactly the two `@zanix/auth` exports this module calls —
+ * deliberately NOT `typeof import('@zanix/auth')`. See `http-remote-adapter.ts`'s own doc for the
+ * confirmed-real `zanix space build` regression a whole-module type alias causes.
+ *
+ * This file keeps the raw `await import(specifier) as AuthExports` shape (below, inside
+ * {@linkcode registerMcpServer}) rather than `@zanix/helpers`'s `lazyFunction` — a genuine case
+ * the generic helper doesn't fit, not left this way merely for consistency with
+ * `register-jobs.ts`'s own `AsyncmqExports`: `AuthTokenValidation` is applied as a real class
+ * DECORATOR (`@AuthTokenValidation({...})`), which needs the actual decorator function
+ * SYNCHRONOUSLY, at class-declaration time — `lazyFunction`'s wrapper always returns a `Promise`
+ * (it has to `await import()` internally on every call), which a decorator position can never
+ * accept. Resolving the whole module once via a real `await import()`, before the class is
+ * declared, then using both exports synchronously, is the only way this specific shape works.
+ */
+interface AuthExports {
+  AuthTokenValidation: (
+    options?: { type?: 'user' | 'api' | ('user' | 'api')[] },
+  ) => ZanixGenericDecorator
+  exchangeServiceCredential: (assertion: string) => Promise<unknown>
+}
 
 /** The fixed Application identity + path segment for the aggregated MCP endpoint — a dedicated
  * Application (like `@zanix/admin`'s own), never namespaced under any one app's own mount prefix,
@@ -52,6 +75,13 @@ let registered = false
 export async function registerMcpServer(): Promise<void> {
   if (registered) return
   registered = true
+
+  // `@zanix/auth` itself is reached through a DELIBERATELY non-literal `import()` specifier
+  // (assigned to a local variable first, never `import('@zanix/auth')` inline) — see
+  // `http-remote-adapter.ts`'s own doc for the full reasoning; a process that never calls this
+  // function never pulls `@zanix/auth` into its module graph either.
+  const specifier = AUTH_SPECIFIER
+  const { AuthTokenValidation, exchangeServiceCredential } = await import(specifier) as AuthExports
 
   await ProgramModule.defineApplication(MCP_APPLICATION, () => {
     @Controller({ prefix: '__zanix-mcp' })

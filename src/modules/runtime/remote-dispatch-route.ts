@@ -5,12 +5,35 @@ import {
   type HandlerResponse,
   Post,
   ZanixController,
+  type ZanixGenericDecorator,
 } from '@zanix/server'
-import { AuthTokenValidation, exchangeServiceCredential } from '@zanix/auth'
 import { HttpError, InternalError } from '@zanix/errors'
 import { getLocalOperation, isCallerAllowed } from './operation-registry.ts'
 import { OPERATIONS_PATH_SEGMENT, SERVICE_TOKEN_PATH_SEGMENT } from './http-remote-adapter.ts'
 import { ServiceTokenExchangeRTO } from './rtos/service-token.rto.ts'
+import { AUTH_SPECIFIER } from '../lazy/specifiers.ts'
+
+/**
+ * Narrow, hand-declared shape for exactly the two `@zanix/auth` exports this module calls —
+ * deliberately NOT `typeof import('@zanix/auth')`. See `http-remote-adapter.ts`'s own doc for the
+ * confirmed-real `zanix space build` regression a whole-module type alias causes.
+ *
+ * This file keeps the raw `await import(specifier) as AuthExports` shape (below, inside
+ * {@linkcode registerRemoteDispatchRoutes}) rather than `@zanix/helpers`'s `lazyFunction` — a
+ * genuine case the generic helper doesn't fit, not left this way merely for consistency with
+ * `register-jobs.ts`'s own `AsyncmqExports`: `AuthTokenValidation` is applied as a real class
+ * DECORATOR (`@AuthTokenValidation({...})`), which needs the actual decorator function
+ * SYNCHRONOUSLY, at class-declaration time — `lazyFunction`'s wrapper always returns a `Promise`
+ * (it has to `await import()` internally on every call), which a decorator position can never
+ * accept. Resolving the whole module once via a real `await import()`, before the class is
+ * declared, then using both exports synchronously, is the only way this specific shape works.
+ */
+interface AuthExports {
+  AuthTokenValidation: (
+    options?: { type?: 'user' | 'api' | ('user' | 'api')[] },
+  ) => ZanixGenericDecorator
+  exchangeServiceCredential: (assertion: string) => Promise<unknown>
+}
 
 /**
  * Registers the two routes an app needs to be callable over HTTP by `HttpRemoteAdapter` — a
@@ -43,15 +66,25 @@ import { ServiceTokenExchangeRTO } from './rtos/service-token.rto.ts'
  *   behavior. Dispatches to the exact same `RuntimeContext`-bound handler `ctx.remote()` uses for
  *   an in-process call — an operation's own code never distinguishes the two paths.
  *
+ * `@zanix/auth` itself is reached through a DELIBERATELY non-literal `import()` specifier
+ * (assigned to a local variable first, never `import('@zanix/auth')` inline) — Deno's module
+ * graph builder (and, transitively, the Vite/Rolldown dependency scan that walks it during
+ * `zanix space build`) only follows a dynamic import whose argument is a string literal it can
+ * analyze statically; routing it through a variable keeps `@zanix/auth` out of that graph
+ * entirely for any app that declares no `operations` at all — checked BEFORE the import, not
+ * after, same as this function's own early return always worked.
+ *
  * @param def The already-normalized app being registered — expected to already be inside the
  * `ProgramModule.defineApplication(def.name, ...)` scope `registerApp` opened.
  */
-export function registerRemoteDispatchRoutes(
+export async function registerRemoteDispatchRoutes(
   def: NormalizedAppDefinition,
-): void {
+): Promise<void> {
   if (!Object.keys(def.operations).length) return
 
   const appName = def.name
+  const specifier = AUTH_SPECIFIER
+  const { AuthTokenValidation, exchangeServiceCredential } = await import(specifier) as AuthExports
 
   @Controller({ prefix: `${OPERATIONS_PATH_SEGMENT}/${appName}` })
   class _RemoteDispatchController extends ZanixController {
