@@ -38,3 +38,7 @@ jobs:
       # Temporarily disabled: @zanix/cli check-cycles has not been published yet.
       # - name: Check for circular-import hazards
       #   run: deno run -A jsr:@zanix/cli check-cycles
+
+      # Temporarily disabled: @zanix/cli check-duplicates has not been published yet.
+      # - name: Check for duplicate '@zanix/*' dependencies
+      #   run: deno run -A jsr:@zanix/cli check-duplicates
