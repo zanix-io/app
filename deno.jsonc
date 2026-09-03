@@ -1,6 +1,6 @@
 {
   "name": "@zanix/app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "zanix": {
     "project": "library"
   },
@@ -71,7 +71,7 @@
     "./src/@tests/": {
       "@zanix/datamaster": "jsr:@zanix/datamaster@^1.7.0",
       "@zanix/datamaster/core": "jsr:@zanix/datamaster@^1.7.0/core",
-      "@zanix/auth": "jsr:@zanix/auth@^0.8.1"
+      "@zanix/auth": "jsr:@zanix/auth@^1.0.0"
     }
   },
   "exports": {
