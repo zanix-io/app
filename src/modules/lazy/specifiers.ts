@@ -46,4 +46,4 @@ export const DATAMASTER_SPECIFIER = 'jsr:@zanix/datamaster@^1.7.0'
  * singleton from this package's own — `AuthTokenValidation`'s guard registers into that other
  * instance and never actually runs against a real request. Matches `deno.jsonc`'s own
  * `./src/@tests/` scope, which pins the same floor for the same reason. */
-export const AUTH_SPECIFIER = 'jsr:@zanix/auth@^0.8.1'
+export const AUTH_SPECIFIER = 'jsr:@zanix/auth@^1.0.0'
