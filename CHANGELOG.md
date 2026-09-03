@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-09-02
+
+### Added
+
+- **`resolveResource<T = unknown>(appName, slot): T | undefined`** (`./runtime`,
+  `resource-instance-registry.ts`) — resolves an already-constructed resource instance OUTSIDE any
+  `RuntimeContext`, the resource-side counterpart to `resolveBehavior`. `ctx.resource(slot)` reads a
+  `Map` threaded purely functionally through `activateApps()`/`installApp()`/`uninstallApp()` (each
+  returns a fresh `Map`, never mutating the one it received), so nothing outside a `setup`/
+  `onStart`/`onStop`/`operations` closure could reach a resolved resource before — a
+  `ZanixInteractor` handling a request, for instance, has no `ctx` of its own to call
+  `ctx.resource()` from. `resolveResources()` now also mirrors every entry it produces into a
+  process-wide `${appName}:${slot} -> instance` overlay (covering both a full `activateApps()` batch
+  and an `installApp()` delta), which `resolveResource` reads from. `uninstallApp` and
+  `deactivateApps` clear an app's own entries from that overlay right after its resources actually
+  close, so `resolveResource` never returns an instance that may already be unusable. `T` is
+  manually specified, not inferred (`slot` is just a string, with no type-carrying shape to infer
+  from) — same ergonomic-cast reasoning as `resolveBehavior<T>`.
+- **`resolveConfig<T = unknown>(appName, key): T | undefined`** (`./runtime`, `config-overrides.ts`)
+  — resolves a config override-or-default OUTSIDE any `RuntimeContext`, the config-side counterpart
+  to `resolveBehavior`/`resolveResource`. `ctx.config.get(key)` used to read the manifest's own
+  `def.config[key]?.default` directly from closure, so nothing outside a
+  `setup`/`onStart`/`onStop`/`operations` closure could resolve a single config value — a
+  `ZanixInteractor` handling a request has no `ctx` of its own to call `ctx.config.get()` from, the
+  same gap `resolveBehavior` already closed for `behaviors`. `registerApp()` now also registers
+  every declared `config` default into a process-wide `${appName}:${key} -> default` registry (via
+  the new `registerConfigDefaults`, called alongside the existing `registerBehaviors`);
+  `ctx.config.get` now delegates entirely to `resolveConfig`, so the two entry points can never
+  resolve differently. `T` is manually specified, not inferred (`key` is just a string, with no
+  type-carrying shape to infer from) — same ergonomic-cast reasoning as
+  `resolveBehavior<T>`/`resolveResource<T>`.
+
+### Fixed
+
+- `ResourceFactory` (`@zanix/app/runtime`, `resource-types.ts`) rejected any factory returning a
+  real `@zanix/server` connector. `CloseableResource` requires a PUBLIC `close()`, but
+  `ZanixConnector.close()` — inherited by `RestClient` and every connector built on it, including
+  `@zanix/auth`'s `OAuth2Connector`/`GoogleOAuth2Connector`/`GitHubOAuth2Connector` — is declared
+  `protected` (internal framework lifecycle, never meant to be called outside the
+  `@Connector`/`TargetContainer` path). A `protected` member is invisible to a structural check
+  against a public-only type, so `deno check` genuinely rejected
+  `(options) =>
+  new GoogleOAuth2Connector(options)` as a `ResourceFactory` (`TS2322`) — the only
+  way to register such a connector as a swappable resource was to wrap it in a plain
+  `{ connector, close: () => {}
+  }` object by hand at every call site. `ResourceFactory`'s return
+  type now also accepts a `ZanixConnector` instance directly: assigning a subclass to its own base
+  class is ordinary inheritance-based assignability, where `protected` is no obstacle, so this
+  needed no runtime change — `ResourceRegistry`/`resolveResources` already closed and health-gated a
+  `ZanixConnector` instance correctly; only the type a factory is checked against was too narrow to
+  admit one.
+
 ## [0.2.1] - 2026-08-26
 
 ### Fixed

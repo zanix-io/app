@@ -1,15 +1,28 @@
 import type { CloseableResource } from './resource-registry.ts'
 import { DATAMASTER_SPECIFIER } from '../lazy/specifiers.ts'
 import { lazyClass } from '@zanix/helpers'
+import type { ZanixConnector } from '@zanix/server'
 
 /** Builds the real resource instance for one `resources.<name>`/`dependencies.<slot>.type`
  * entry, given its `options` exactly as declared in the manifest/host `resources`. Sync or
  * async — a concrete connector's own construction (e.g. `new ZanixMongoConnector(options)`) is
  * sync (async initialization happens separately, via its own `isReady`), but nothing requires
- * every factory to be. */
+ * every factory to be.
+ *
+ * Accepts a `ZanixConnector` instance directly, alongside a plain `CloseableResource` — every
+ * `ZanixConnector` subclass (`RestClient`/`OAuth2Connector` and its own subclasses included)
+ * declares `close()` as `protected`, so it can never satisfy `CloseableResource` structurally
+ * (a `protected` member is invisible to a structural check against an unrelated public-only
+ * type). Widening the union to the class itself sidesteps that: assigning a subclass instance to
+ * its own base class is ordinary inheritance-based assignability, where `protected` members are
+ * no obstacle at all. Nothing downstream needs to change for this — `resolveResources()` already
+ * duck-types any resolved instance as a `ZanixConnector` for health-gating (`isZanixConnector` in
+ * `resolve-resources.ts`), and `ResourceRegistry` already closes one via a `CloseableResource`
+ * type assertion (see its own doc) — both were already handling this shape at runtime; only the
+ * type consumers write a factory against was too narrow to admit it. */
 export type ResourceFactory = (
   options: Record<string, unknown>,
-) => CloseableResource | Promise<CloseableResource>
+) => CloseableResource | ZanixConnector | Promise<CloseableResource | ZanixConnector>
 
 /**
  * Open, string-keyed `type -> factory` registry — same shape and purpose as `@zanix/server`'s

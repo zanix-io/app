@@ -5,6 +5,7 @@ import type { ResourceRegistry } from './resource-registry.ts'
 import { connectorModuleInitialization } from '@zanix/server'
 import type { ZanixConnector } from '@zanix/server'
 import { createRemoteCaller, type HttpRemoteDispatcher } from './remote-caller.ts'
+import { registerResourceInstances } from './resource-instance-registry.ts'
 
 /**
  * Structural check for "is this a real `ZanixConnector` instance" — `CloseableResource` (what
@@ -62,6 +63,11 @@ async function healthGateIfConnector(instance: unknown): Promise<void> {
  * to a `RemoteAppHandle` (`{call(operationName, payload, options)}`) instead — see
  * `RemoteResourceDeclaration`'s own doc for why that's deliberately NOT the same shape a local
  * instance of the same resource `type` would have.
+ *
+ * Every entry returned here also merges into `resource-instance-registry.ts`'s own process-wide
+ * overlay (see {@link registerResourceInstances}), so `resolveResource(appName, slot)` can resolve
+ * it from outside any `RuntimeContext` too — the same standalone resolution `resolveBehavior`
+ * already gives `behaviors`.
  */
 export async function resolveResources(
   graph: DependencyGraph,
@@ -111,5 +117,6 @@ export async function resolveResources(
     }),
   )
 
+  registerResourceInstances(resolvedByAppSlot)
   return resolvedByAppSlot
 }

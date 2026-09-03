@@ -84,7 +84,9 @@ export {
   type RemoteInstanceOptions,
 } from './remote-lifecycle.ts'
 export { getConfigOverride, hasConfigOverride, setConfigOverride } from './config-overrides.ts'
+export { resolveConfig } from './config-overrides.ts'
 export { resolveBehavior } from './behavior-registry.ts'
+export { resolveResource } from './resource-instance-registry.ts'
 export {
   type MtlsDispatchOptions,
   type MtlsDispatchServer,

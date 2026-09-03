@@ -5,6 +5,7 @@ import type { ActivatedApps } from './activate-apps.ts'
 import { runOnStop } from './lifecycle.ts'
 import type { AnnouncedRemoteInstance } from './remote-lifecycle.ts'
 import { closeSandboxedWorkers } from './sandbox-operation.ts'
+import { clearResourceInstances } from './resource-instance-registry.ts'
 
 /**
  * Hot-uninstalls ONE app from an already-activated, already-running batch — the reverse of
@@ -27,7 +28,10 @@ import { closeSandboxedWorkers } from './sandbox-operation.ts'
  *    closes now; one still shared with another active app stays open (see
  *    `ResourceRegistry.release`). Also terminates any worker `appName`'s own `sandbox`-declared
  *    operations created (see `closeSandboxedWorkers`) — never shared with another app, so always
- *    safe to close outright, no reference counting needed there.
+ *    safe to close outright, no reference counting needed there. `appName`'s own entries also leave
+ *    `resource-instance-registry.ts`'s process-wide overlay here (see `clearResourceInstances`), so
+ *    a standalone `resolveResource(appName, slot)` call never returns an instance that may already
+ *    be closed.
  *
  * Still the CALLER's own job, exactly as serving `appName` was `installApp`'s caller's job: this
  * function only removes ROUTE METADATA (`ProgramModule.unregisterApplicationRoutes`) — an
@@ -129,6 +133,9 @@ export async function uninstallApp(
     // Same reasoning for any sandboxed operation's own dedicated worker(s) — a no-op if `appName`
     // never declared any `sandbox` operations.
     closeSandboxedWorkers(appName)
+    // Same reasoning again for the standalone resolveResource() overlay — a no-op if `appName`
+    // never resolved any resource.
+    clearResourceInstances(appName)
   }
 
   const resources = new Map(activated.resources)

@@ -23,12 +23,14 @@
 10. [`AppContainer.registerApp` (`./runtime`)](#appcontainerregisterapp-runtime)
 11. [`ResourceRegistry` (`./runtime`)](#resourceregistry-runtime)
 12. [`resolveResources` + resource types (`./runtime`)](#resolveresources--resource-types-runtime)
-13. [`ctx.behavior()` — behavior overrides (`./runtime`)](#ctxbehavior--behavior-overrides-runtime)
-14. [`runOnStart`/`runOnStop` (`./runtime`)](#runonstartrunonstop-runtime)
-15. [`activateApps`/`deactivateApps` (`./runtime`)](#activateappsdeactivateapps-runtime)
-16. [Additional runtime utilities (`./runtime`)](#additional-runtime-utilities-runtime)
-17. [Changelog](#changelog)
-18. [License](#license)
+13. [`resolveResource()` — standalone resource resolution (`./runtime`)](#resolveresource--standalone-resource-resolution-runtime)
+14. [`resolveConfig()` — standalone config resolution (`./runtime`)](#resolveconfig--standalone-config-resolution-runtime)
+15. [`ctx.behavior()` — behavior overrides (`./runtime`)](#ctxbehavior--behavior-overrides-runtime)
+16. [`runOnStart`/`runOnStop` (`./runtime`)](#runonstartrunonstop-runtime)
+17. [`activateApps`/`deactivateApps` (`./runtime`)](#activateappsdeactivateapps-runtime)
+18. [Additional runtime utilities (`./runtime`)](#additional-runtime-utilities-runtime)
+19. [Changelog](#changelog)
+20. [License](#license)
 
 ## Description
 
@@ -322,6 +324,26 @@ registerResourceType(
 )
 ```
 
+A factory may return a real `ZanixConnector` instance directly — any `@zanix/server` connector
+(`RestClient`) or a connector built on it (`@zanix/auth`'s
+`OAuth2Connector`/`GoogleOAuth2Connector`/ `GitHubOAuth2Connector` included), no wrapper object
+required:
+
+```ts
+registerResourceType(
+  'google-oauth2',
+  (options) => new GoogleOAuth2Connector(options),
+)
+```
+
+`ResourceFactory`'s return type accepts `ZanixConnector` alongside a plain `CloseableResource`
+precisely because `ZanixConnector.close()` is `protected` (internal framework lifecycle, never meant
+to be called outside the `@Connector`/`TargetContainer` path) — a `protected` member can never
+satisfy `CloseableResource`'s public `close()` structurally, so without this, no `ZanixConnector`
+subclass could ever type-check as a `ResourceFactory`. `ResourceRegistry`/`resolveResources` already
+close and health-gate such an instance correctly; only the type consumers write a factory against
+needed to admit it.
+
 If a constructed instance is a real `ZanixConnector` (has both `isReady` and `isHealthy()`),
 `resolveResources` health-gates it before resolving — reusing `@zanix/server`'s own
 `connectorModuleInitialization`, the exact function `targetInitializations` already runs for every
@@ -330,6 +352,78 @@ If a constructed instance is a real `ZanixConnector` (has both `isReady` and `is
 never sees them otherwise. A plain `CloseableResource` with no such concept (a custom
 `registerResourceType` factory, or a test fake) is never forced through this — it resolves as soon
 as its factory returns.
+
+## `resolveResource()` — standalone resource resolution (`./runtime`)
+
+`ctx.resource(slot)` only exists inside a `RuntimeContext` (`setup`/`onStart`/`onStop`/
+`operations`) — a `ZanixInteractor` handling a request, or a `@zanix/space` page's own render, has
+none of that. `resolveResource(appName, slot)` resolves the SAME already-constructed instance
+standalone, from anywhere:
+
+```ts
+import { resolveResource } from '@zanix/app/runtime'
+
+// Inside a ZanixInteractor with no RuntimeContext of its own.
+class LoginInteractor {
+  async login(payload: LoginPayload) {
+    const googleOAuth2 = resolveResource<GoogleOAuth2Connector>('auth', 'googleOAuth2')
+    return await googleOAuth2?.exchangeCode(payload.code)
+  }
+}
+```
+
+`resolveResources()` mirrors every entry it produces (both a full `activateApps()` batch and an
+`installApp()` delta) into a process-wide `${appName}:${slot} -> instance` overlay —
+`resolveResource` reads from that overlay directly, never re-resolving or re-constructing anything.
+`uninstallApp`/`deactivateApps` remove an app's own entries from it right after that app's resources
+actually close, so `resolveResource` never hands back an instance whose `close()` already ran.
+
+`T` is manually specified, not inferred (`slot` is just a string, with no type-carrying shape to
+infer from) — same ergonomic-cast reasoning as `resolveBehavior<T>` below: exactly as sound as an
+`as T` would be, only sparing the call site from writing one out. `resolveResource` returns
+`undefined` for a slot that was never resolved — an unknown name, an app never activated in this
+process, or one already uninstalled/deactivated.
+
+## `resolveConfig()` — standalone config resolution (`./runtime`)
+
+`ctx.config.get(key)` only exists inside a `RuntimeContext` (`setup`/`onStart`/`onStop`/
+`operations`) — a `ZanixInteractor` handling a request has none of that.
+`resolveConfig(appName,
+key)` resolves the SAME override-or-default value standalone, from anywhere:
+
+```ts
+import { resolveConfig } from '@zanix/app/runtime'
+
+// Inside a ZanixInteractor with no RuntimeContext of its own.
+class AuthService {
+  async loginWithOauthCallback(profile: OAuthProfile) {
+    const allowSelfRegistration = resolveConfig<boolean>('auth', 'selfRegistrationViaOAuth')
+    if (!allowSelfRegistration && !(await this.findExistingAccount(profile))) {
+      throw new UnauthorizedError('No existing account for this OAuth identity.')
+    }
+    // ...
+  }
+}
+```
+
+`registerApp()` registers every declared `config` default into a process-wide
+`${appName}:${key} -> default` registry (`registerConfigDefaults`, called alongside the existing
+`registerBehaviors`) — `resolveConfig` reads from that registry, falling back to it only when no
+host override was ever set for `key` (the Config Plane overlay `getConfigOverride`/
+`setConfigOverride` already read/write — see
+[Distributed lifecycle](./docs/distributed-runtime.md#distributed-lifecycle-runtime)).
+`ctx.config.get` now delegates entirely to `resolveConfig`, so the two entry points can never
+resolve differently — one registry, two ways in, the same design `ctx.behavior()`/`resolveBehavior`
+already established.
+
+`T` is manually specified, not inferred (`key` is just a string, with no type-carrying shape to
+infer from) — same ergonomic-cast reasoning as `resolveBehavior<T>`/`resolveResource<T>`.
+`resolveConfig` returns `undefined` for a key that was never resolved to anything — an unknown name,
+a declared key with no default, or an app never activated in this process.
+
+A `secret: true` config entry (never allowed a literal `default` — see the manifest reference above)
+resolves the same way: `undefined` unless a host override was actually set for it, exactly as
+`ctx.config.get` already behaves for one.
 
 ## `ctx.behavior()` — behavior overrides (`./runtime`)
 
@@ -537,15 +631,15 @@ Lower-level exports that back the higher-level APIs documented above — real, s
 imported by production consumers (`@zanix/admin`, notably), but each is a one-purpose primitive
 rather than something that needs its own full section:
 
-| Export                                                                | What it does                                                                                                                                                                                                                                                                                                                                                   |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getLocalOperation(appName, operationName)`                           | Resolves a registered operation's handler/`ctx` directly, or `undefined` if `appName` never registered `operationName` in THIS process — the same lookup `ctx.remote()`'s local-first branch and both the HTTP/mTLS dispatch routes use internally.                                                                                                            |
-| `resolveTarget(appName, Target)`                                      | Backs `ctx.resolve(Target)` — sugar over `ProgramModule.getInteractors`/`getProviders`/`getConnectors`, dispatched by which of `@Interactor`/`@Provider`/`@Connector` `Target` extends. Throws `UNRESOLVABLE_TARGET` for a class extending none of them.                                                                                                       |
-| `getResourceFactory(type)`                                            | Reads back a resource type's registered factory (built-in `'mongo'`/`'redis'`, or anything `registerResourceType` added) — `undefined` if `type` was never registered.                                                                                                                                                                                         |
-| `getNamespacedJobOrigin(namespacedName)`                              | Resolves a namespaced job name (`${appName}:${jobName}`) back to the app/original job name it came from — `undefined` if never registered via `registerApp`.                                                                                                                                                                                                   |
-| `getConfigOverride(appName, key)` / `hasConfigOverride(appName, key)` | The same Config Plane overlay `ctx.config.get`/`.has` already read from (see [Distributed lifecycle](./docs/distributed-runtime.md#distributed-lifecycle-runtime)) — useful from OUTSIDE a `RuntimeContext` (e.g. a health-check job). `setConfigOverride` is called internally by the Config Plane subscription callback, never by application code directly. |
-| `generateTraceparent()`                                               | Generates a fresh W3C `traceparent` value — the same one `HttpRemoteAdapter` propagates on every outgoing call.                                                                                                                                                                                                                                                |
-| `isZanixAppDefinition(value)`                                         | Type guard for whatever `defineZanixApp()` returns — the supported way to check an unknown value is a `ZanixAppDefinition`, rather than reading its brand field directly.                                                                                                                                                                                      |
+| Export                                                                | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getLocalOperation(appName, operationName)`                           | Resolves a registered operation's handler/`ctx` directly, or `undefined` if `appName` never registered `operationName` in THIS process — the same lookup `ctx.remote()`'s local-first branch and both the HTTP/mTLS dispatch routes use internally.                                                                                                                                                                                                                                            |
+| `resolveTarget(appName, Target)`                                      | Backs `ctx.resolve(Target)` — sugar over `ProgramModule.getInteractors`/`getProviders`/`getConnectors`, dispatched by which of `@Interactor`/`@Provider`/`@Connector` `Target` extends. Throws `UNRESOLVABLE_TARGET` for a class extending none of them.                                                                                                                                                                                                                                       |
+| `getResourceFactory(type)`                                            | Reads back a resource type's registered factory (built-in `'mongo'`/`'redis'`, or anything `registerResourceType` added) — `undefined` if `type` was never registered.                                                                                                                                                                                                                                                                                                                         |
+| `getNamespacedJobOrigin(namespacedName)`                              | Resolves a namespaced job name (`${appName}:${jobName}`) back to the app/original job name it came from — `undefined` if never registered via `registerApp`.                                                                                                                                                                                                                                                                                                                                   |
+| `getConfigOverride(appName, key)` / `hasConfigOverride(appName, key)` | The raw Config Plane OVERRIDE overlay only — no fallback to the manifest's own declared default (see [Distributed lifecycle](./docs/distributed-runtime.md#distributed-lifecycle-runtime)). For the full override-or-default resolution `ctx.config.get` gives, standalone, reach for [`resolveConfig`](#resolveconfig--standalone-config-resolution-runtime) instead. `setConfigOverride` is called internally by the Config Plane subscription callback, never by application code directly. |
+| `generateTraceparent()`                                               | Generates a fresh W3C `traceparent` value — the same one `HttpRemoteAdapter` propagates on every outgoing call.                                                                                                                                                                                                                                                                                                                                                                                |
+| `isZanixAppDefinition(value)`                                         | Type guard for whatever `defineZanixApp()` returns — the supported way to check an unknown value is a `ZanixAppDefinition`, rather than reading its brand field directly.                                                                                                                                                                                                                                                                                                                      |
 
 ## Changelog
 

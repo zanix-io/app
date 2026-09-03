@@ -13,6 +13,7 @@ import { ResourceRegistry } from './resource-registry.ts'
 import { resolveResources } from './resolve-resources.ts'
 import { runOnStart, runOnStop } from './lifecycle.ts'
 import { setBehaviorOverride } from './behavior-registry.ts'
+import { clearResourceInstances } from './resource-instance-registry.ts'
 import { createRemoteCaller, type HttpRemoteDispatcher } from './remote-caller.ts'
 import { HttpRemoteAdapter, resolveDefaultDispatcher } from './http-remote-adapter.ts'
 import { resolveControlPlaneProvider } from './control-plane/mod.ts'
@@ -204,7 +205,10 @@ async function announceConfiguredInstances(
  * starts closing resources. Only then does `runOnStop` (across every app, while `resources` is
  * still open) `→ registry.close()` (only once every `onStop` has settled) run — same ordering
  * guarantee `runOnStop`'s own doc already documents, just applied to the whole set activated
- * together.
+ * together. Every activated app's own entries also leave `resource-instance-registry.ts`'s
+ * process-wide overlay right after `registry.close()` settles (regardless of whether it threw), so
+ * a standalone `resolveResource(appName, slot)` call never returns an instance this batch already
+ * closed.
  *
  * @param activated Whatever {@link activateApps} returned for this same set of apps.
  * @throws {AggregateError} (from `runOnStop`) if one or more `onStop` handlers failed — `resources`
@@ -223,6 +227,10 @@ export async function deactivateApps(activated: ActivatedApps): Promise<void> {
       activated.remoteCaller,
     )
   } finally {
-    await activated.registry.close()
+    try {
+      await activated.registry.close()
+    } finally {
+      for (const app of activated.apps) clearResourceInstances(app.name)
+    }
   }
 }

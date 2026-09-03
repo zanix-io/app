@@ -165,7 +165,9 @@ export {
   type RemoteInstanceOptions,
 } from 'modules/runtime/mod.ts'
 export { getConfigOverride, hasConfigOverride, setConfigOverride } from 'modules/runtime/mod.ts'
+export { resolveConfig } from 'modules/runtime/mod.ts'
 export { resolveBehavior } from 'modules/runtime/mod.ts'
+export { resolveResource } from 'modules/runtime/mod.ts'
 export {
   type MtlsDispatchOptions,
   type MtlsDispatchServer,

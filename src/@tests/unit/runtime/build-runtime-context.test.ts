@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { assert, assertEquals, assertStrictEquals } from '@std/assert'
 import { buildRuntimeContext } from 'modules/runtime/build-runtime-context.ts'
-import { setConfigOverride } from 'modules/runtime/config-overrides.ts'
+import { registerConfigDefaults, setConfigOverride } from 'modules/runtime/config-overrides.ts'
 
 Deno.test('buildRuntimeContext - resource', () => {
   const def = {
@@ -21,13 +21,18 @@ Deno.test('buildRuntimeContext - resource', () => {
 
 Deno.test('buildRuntimeContext - config.get returns default', () => {
   const def = {
-    name: 'my-app',
+    name: 'build-runtime-context-default-app',
     config: {
       port: {
         default: 8080,
       },
     },
   } as any
+
+  // config.get delegates to resolveConfig(def.name, key), which reads the process-wide
+  // `configDefaults` registry `registerConfigDefaults` populates at registerApp() time — same
+  // requirement `ctx.behavior()`/`resolveBehavior` already has for `registerBehaviors`.
+  registerConfigDefaults(def)
 
   const resources = new Map<string, unknown>()
 

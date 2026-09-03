@@ -6,6 +6,7 @@ import { createRemoteCaller, type RemoteCallerFactory } from './remote-caller.ts
 import { registerOperations } from './operation-registry.ts'
 import { registerRemoteDispatchRoutes } from './remote-dispatch-route.ts'
 import { registerBehaviors } from './behavior-registry.ts'
+import { registerConfigDefaults } from './config-overrides.ts'
 
 /**
  * Composes one already-normalized app into the running process: opens its own
@@ -14,9 +15,10 @@ import { registerBehaviors } from './behavior-registry.ts'
  * locally — so any app in this same process can reach them via `ctx.remote()` at zero cost — and,
  * if it declared any, the HTTP routes a REMOTE caller would dispatch to), registers its
  * `behaviors` defaults (so `resolveBehavior(def.name, name)` can resolve them even from outside
- * this app's own `RuntimeContext` — see `behavior-registry.ts`), then runs `setup(ctx)` (if the
- * manifest declared one) with a `ctx` scoped to this app and this call's already-resolved
- * `resources`.
+ * this app's own `RuntimeContext` — see `behavior-registry.ts`) and its `config` defaults (so
+ * `resolveConfig(def.name, key)` can resolve them the same way — see `config-overrides.ts`), then
+ * runs `setup(ctx)` (if the manifest declared one) with a `ctx` scoped to this app and this call's
+ * already-resolved `resources`.
  *
  * Deliberately NOT this function's job:
  * - Loading `rootDir`/`package` manifest files (an app installed from disk/a package specifier) —
@@ -45,6 +47,7 @@ export async function registerApp(
     await registerNamespacedJobs(def)
     registerOperations(def, resources, remoteCaller)
     registerBehaviors(def)
+    registerConfigDefaults(def)
     await registerRemoteDispatchRoutes(def)
     await def.setup?.(buildSetupContext(def, resources, remoteCaller))
   })
