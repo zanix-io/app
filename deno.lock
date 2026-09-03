@@ -8,6 +8,7 @@
     "jsr:@std/assert@^1.0.10": "1.0.19",
     "jsr:@std/async@^1.0.0-rc.1": "1.5.0",
     "jsr:@std/cli@~0.224.7": "0.224.7",
+    "jsr:@std/crypto@^1.1.0": "1.1.0",
     "jsr:@std/encoding@1": "1.0.11",
     "jsr:@std/encoding@1.0.0-rc.2": "1.0.0-rc.2",
     "jsr:@std/fmt@0.224": "0.224.0",
@@ -29,10 +30,13 @@
     "jsr:@std/streams@~0.224.5": "0.224.5",
     "jsr:@std/testing@1.0.9": "1.0.9",
     "jsr:@zanix/asyncmq@0.8": "0.8.0",
+    "jsr:@zanix/auth@1": "1.0.0",
     "jsr:@zanix/auth@~0.8.1": "0.8.1",
-    "jsr:@zanix/datamaster@^1.7.0": "1.7.0",
-    "jsr:@zanix/server@4": "4.0.0",
-    "jsr:@zanix/utils@4": "4.0.0",
+    "jsr:@zanix/datamaster@^1.7.0": "1.9.0",
+    "jsr:@zanix/datamaster@^1.9.0": "1.9.0",
+    "jsr:@zanix/server@4": "4.2.0",
+    "jsr:@zanix/utils@4": "4.1.1",
+    "jsr:@zanix/utils@^4.1.0": "4.1.1",
     "npm:mongoose@8": "8.24.4",
     "npm:redis@^5.9.0": "5.12.1"
   },
@@ -74,6 +78,9 @@
     },
     "@std/cli@0.224.7": {
       "integrity": "654ca6477518e5e3a0d3fabafb2789e92b8c0febf1a1d24ba4b567aba94b5977"
+    },
+    "@std/crypto@1.1.0": {
+      "integrity": "b8d6d0a6377a32b213af2661ed7bf1062d94feac0c57def5526a8e74a95c3ec8"
     },
     "@std/encoding@1.0.0-rc.2": {
       "integrity": "160d7674a20ebfbccdf610b3801fee91cf6e42d1c106dd46bbaf46e395cd35ef"
@@ -162,38 +169,46 @@
       "integrity": "a66f121a851132e99237cf71c2e4b611fb1cdd889f22fe61fc0f97eeb1b0400d",
       "dependencies": [
         "jsr:@zanix/server",
-        "jsr:@zanix/utils"
+        "jsr:@zanix/utils@4"
       ]
     },
     "@zanix/auth@0.8.1": {
       "integrity": "0c6cfac247238b2784b739dc57d74403242ba6f78abf3edc4f0e8b11ec9cfbae",
       "dependencies": [
-        "jsr:@zanix/datamaster",
         "jsr:@zanix/server",
-        "jsr:@zanix/utils"
+        "jsr:@zanix/utils@4"
       ]
     },
-    "@zanix/datamaster@1.7.0": {
-      "integrity": "6715470ffb30bed484631d9900804c416e2fb4db3435b9c2877baad1fd7e39f3",
+    "@zanix/auth@1.0.0": {
+      "integrity": "b2a71f66f342d376b1c73b72b00454ed309703d7b45705e3f75367e832e19b8f",
+      "dependencies": [
+        "jsr:@zanix/datamaster@^1.9.0",
+        "jsr:@zanix/server",
+        "jsr:@zanix/utils@4"
+      ]
+    },
+    "@zanix/datamaster@1.9.0": {
+      "integrity": "e0ab74db8211ad67f731a0798fb9ebfc1f4943271b1894af68a4a3f2efacc142",
       "dependencies": [
         "jsr:@db/sqlite",
         "jsr:@zanix/server",
-        "jsr:@zanix/utils",
+        "jsr:@zanix/utils@4",
         "npm:mongoose",
         "npm:redis"
       ]
     },
-    "@zanix/server@4.0.0": {
-      "integrity": "03117403ba5e0ee1575d4a0096282149d7b6a7e510f7a1572621958ea58fa3d8",
+    "@zanix/server@4.2.0": {
+      "integrity": "827ae993a8c785cc3fe2a295afded82fa7ee5d693435e05b65a5fca0f296d0ce",
       "dependencies": [
         "jsr:@std/http",
         "jsr:@std/path@0.224",
-        "jsr:@zanix/utils"
+        "jsr:@zanix/utils@^4.1.0"
       ]
     },
-    "@zanix/utils@4.0.0": {
-      "integrity": "2ef04a760e011829ff14e198d6e5fc947ae0cf2615b519c1954ddb78b7b376e6",
+    "@zanix/utils@4.1.1": {
+      "integrity": "0b02e15e30d2143daca24e64019ca12d9cf8bdf531ea33929b68f05a5167d8cb",
       "dependencies": [
+        "jsr:@std/crypto",
         "jsr:@std/fmt@0.224",
         "jsr:@std/path@0.224"
       ]
@@ -347,7 +362,7 @@
       "jsr:@std/semver@^1.0.8",
       "jsr:@std/testing@1.0.9",
       "jsr:@zanix/asyncmq@0.8",
-      "jsr:@zanix/auth@~0.8.1",
+      "jsr:@zanix/auth@1",
       "jsr:@zanix/datamaster@^1.7.0",
       "jsr:@zanix/server@4",
       "jsr:@zanix/utils@4"
