@@ -31,7 +31,6 @@
     "jsr:@std/testing@1.0.9": "1.0.9",
     "jsr:@zanix/asyncmq@0.8": "0.8.0",
     "jsr:@zanix/auth@1": "1.1.1",
-    "jsr:@zanix/auth@~0.8.1": "0.8.1",
     "jsr:@zanix/datamaster@^1.7.0": "1.9.0",
     "jsr:@zanix/datamaster@^1.9.0": "1.9.0",
     "jsr:@zanix/server@4": "4.2.0",
@@ -167,13 +166,6 @@
     },
     "@zanix/asyncmq@0.8.0": {
       "integrity": "a66f121a851132e99237cf71c2e4b611fb1cdd889f22fe61fc0f97eeb1b0400d",
-      "dependencies": [
-        "jsr:@zanix/server",
-        "jsr:@zanix/utils@4"
-      ]
-    },
-    "@zanix/auth@0.8.1": {
-      "integrity": "0c6cfac247238b2784b739dc57d74403242ba6f78abf3edc4f0e8b11ec9cfbae",
       "dependencies": [
         "jsr:@zanix/server",
         "jsr:@zanix/utils@4"
