@@ -51,6 +51,8 @@ async function withServedTarget(
       echo: (payload: unknown) => Promise.resolve({ echoed: payload }),
       slow: (payload: unknown) =>
         new Promise((resolve) => setTimeout(() => resolve(payload), 2000)),
+      bareString: () => Promise.resolve('none'),
+      nothing: () => Promise.resolve(undefined),
       secretother: {
         handler: () =>
           Promise.resolve({
@@ -343,6 +345,32 @@ Deno.test(
 )
 
 // Keep this at the end to ensure the Redis connection (socket) closes properly.
+Deno.test(
+  'HttpRemoteAdapter: a bare-string result and an undefined result both round-trip over HTTP',
+  async () => {
+    const serviceKeys = await generateRSAKeys()
+    const appKeys = await generateRSAKeys()
+    Deno.env.set(`JWK_PRI_${CALLER_APP}`, btoa(serviceKeys.privateKey))
+    Deno.env.set(`JWK_PUB_${CALLER_APP}`, btoa(serviceKeys.publicKey))
+    Deno.env.set('JWK_PRI', btoa(appKeys.privateKey))
+    Deno.env.set('JWK_PUB', btoa(appKeys.publicKey))
+
+    try {
+      await withServedTarget('http-adapter-target-scalar', 4730, async () => {
+        const opts = { timeoutMs: 3000 }
+        const target = 'http-adapter-target-scalar'
+        assertEquals(await adapter.dispatch(CALLER_APP, target, 'bareString', {}, opts), 'none')
+        assertEquals(await adapter.dispatch(CALLER_APP, target, 'nothing', {}, opts), null)
+      })
+    } finally {
+      Deno.env.delete(`JWK_PRI_${CALLER_APP}`)
+      Deno.env.delete(`JWK_PUB_${CALLER_APP}`)
+      Deno.env.delete('JWK_PRI')
+      Deno.env.delete('JWK_PUB')
+    }
+  },
+)
+
 Deno.test('close the shared Redis connection', () => {
   connector['close']()
 })

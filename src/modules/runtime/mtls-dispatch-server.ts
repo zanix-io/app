@@ -165,7 +165,7 @@ async function handleRequest(
   }
 
   try {
-    sendJson(res, 200, await local.handler(payload, local.ctx))
+    sendJson(res, 200, (await local.handler(payload, local.ctx)) ?? null)
   } catch (error) {
     sendJson(res, 500, { message: (error as Error).message })
   }

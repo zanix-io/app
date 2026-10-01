@@ -135,7 +135,11 @@ export async function registerRemoteDispatchRoutes(
       }
 
       const result = await local.handler(ctx.payload.body, local.ctx)
-      return result as HandlerResponse
+      // Always JSON: `@zanix/server` answers a bare string as plain text and `undefined` as an
+      // empty body, neither of which `HttpRemoteAdapter`'s `response.json()` can parse.
+      return new Response(JSON.stringify(result ?? null), {
+        headers: { 'content-type': 'application/json' },
+      }) as unknown as HandlerResponse
     }
   }
 
