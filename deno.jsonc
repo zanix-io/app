@@ -53,7 +53,7 @@
     "@std/assert": "jsr:@std/assert@0.224",
     "@std/testing": "jsr:@std/testing@1.0.9",
     "@std/semver": "jsr:@std/semver@^1.0.8",
-    "@zanix/server": "jsr:@zanix/server@^4.0.0",
+    "@zanix/server": "jsr:@zanix/server@^4.3.4",
     "@zanix/errors": "jsr:@zanix/utils@^4.0.0/errors",
     "@zanix/types": "jsr:@zanix/utils@^4.0.0/types",
     "@zanix/helpers": "jsr:@zanix/utils@^4.0.0/helpers",
@@ -69,9 +69,9 @@
   },
   "scopes": {
     "./src/@tests/": {
-      "@zanix/datamaster": "jsr:@zanix/datamaster@^1.7.0",
+      "@zanix/datamaster": "jsr:@zanix/datamaster@^1.11.1",
       "@zanix/datamaster/core": "jsr:@zanix/datamaster@^1.7.0/core",
-      "@zanix/auth": "jsr:@zanix/auth@^1.0.0"
+      "@zanix/auth": "jsr:@zanix/auth@^1.6.0"
     }
   },
   "exports": {
