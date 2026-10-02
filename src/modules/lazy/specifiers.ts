@@ -35,7 +35,7 @@
  * RabbitMQ connector) — `typings/manifest.ts`'s own separate, TYPE-level import of the same
  * subpath (see this file's own doc) has its real specifier in `deno.jsonc`'s `imports` map
  * instead, not here. */
-export const ASYNCMQ_SPECIFIER = 'jsr:@zanix/asyncmq@^0.8.0/jobs'
+export const ASYNCMQ_SPECIFIER = 'jsr:@zanix/asyncmq@^0.9.1/jobs'
 
 /** @zanix/datamaster */
 export const DATAMASTER_SPECIFIER = 'jsr:@zanix/datamaster@^1.7.0'

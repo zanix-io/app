@@ -1,6 +1,6 @@
 {
   "name": "@zanix/app",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "zanix": {
     "project": "library"
   },
@@ -61,7 +61,7 @@
     "@zanix/validator": "jsr:@zanix/utils@^4.0.0/validator",
     "@zanix/workers": "jsr:@zanix/utils@^4.0.0/workers",
     "@zanix/datamaster/cache/types": "jsr:@zanix/datamaster@^1.7.0/cache/types",
-    "@zanix/asyncmq/jobs": "jsr:@zanix/asyncmq@^0.8.0/jobs",
+    "@zanix/asyncmq/jobs": "jsr:@zanix/asyncmq@^0.9.1/jobs",
     "shared/": "./src/shared/",
     "typings/": "./src/typings/",
     "utils/": "./src/utils/",
