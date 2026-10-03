@@ -3,22 +3,31 @@
 name: CI
 
 on:
-  # Run on push or PRs to main branch
+  # Run on push or PRs to main branch. `publish.yml` starts from this workflow's own completed run
+  # on `master` (`workflow_run`), so a push runs these checks once and publish waits for them.
   pull_request:
     branches:
       - master
   push:
     branches:
       - master
-  # Also invocable as a reusable workflow (`uses: ./.github/workflows/ci.yml`) — `publish.yml`'s
-  # own `ci` job calls into this exact workflow instead of duplicating its steps.
-  workflow_call:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read # Allows reading of the repository's contents.
+
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
       - name: Checkout code
@@ -40,3 +49,9 @@ jobs:
 
       - name: Check for duplicate '@zanix/*' dependencies
         run: deno run --no-config -A jsr:@zanix/cli check-duplicates
+
+      - name: Install redis-server
+        run: sudo apt-get update && sudo apt-get install -y redis-server redis-tools
+
+      - name: Run tests
+        run: deno test --allow-all
